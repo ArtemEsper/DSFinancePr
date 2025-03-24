@@ -1,0 +1,17 @@
+# Here you can define all your data sets by using simple YAML syntax.
+#
+# Documentation for this file format can be found in "The Data Catalog"
+# Link: https://docs.kedro.org/en/stable/data/data_catalog.html
+
+lendingclub:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/Loan_status_2007-2020Q3.csv
+  load_args:
+    compression: infer
+    low_memory: False
+
+lsample:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/Loan_status_sample.csv
+  load_args:
+    compression: infer
