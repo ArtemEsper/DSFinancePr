@@ -32,7 +32,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         ),
         node(
             func=normalize_column_names,
-            inputs="dropped_columns",
+            inputs="clean_data",
             outputs="normalized_columns",
             name="normalize_column_names"),
         node(

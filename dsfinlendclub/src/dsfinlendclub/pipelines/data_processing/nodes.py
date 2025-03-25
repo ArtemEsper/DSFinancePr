@@ -59,7 +59,7 @@ def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
     """Convert types of term, int_rate, issue_d."""
     df['term'] = df['term'].astype(str)
     df['int_rate'] = df['int_rate'].str.rstrip('%').astype(float)
-    df['issue_d'] = pd.to_datetime(df['issue_d'], errors='coerce')
+    df['issue_d'] = pd.to_datetime(df['issue_d'], format="%b-%Y", errors='coerce')
     return df
 
 
