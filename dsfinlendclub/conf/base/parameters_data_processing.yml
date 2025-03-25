@@ -3,3 +3,20 @@
 #
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.8/configuration/parameters.html
+
+admin_columns_to_drop:
+  - id
+  - member_id
+  - url
+  - desc
+  - title
+  - zip_code
+  - emp_title
+  - policy_code
+  - pymnt_plan
+  - application_type
+  - funded_amnt_inv
+  - next_pymnt_d
+  - Unnamed: 0.1
+  - Unnamed: 0
+
