@@ -48,3 +48,43 @@ def drop_unwanted_columns(x: pd.DataFrame, drop_list=None) -> pd.DataFrame:
 
     return x.drop(columns=[col for col in drop_list if col in x.columns], axis=1)
 
+
+def normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert all column names to lowercase and strip whitespace."""
+    df.columns = df.columns.str.lower().str.strip()
+    return df
+
+
+def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert types of term, int_rate, issue_d."""
+    df['term'] = df['term'].astype(str)
+    df['int_rate'] = df['int_rate'].str.rstrip('%').astype(float)
+    df['issue_d'] = pd.to_datetime(df['issue_d'], errors='coerce')
+    return df
+
+
+def remove_invalid_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove rows with invalid or nonsensical values."""
+    df = df[df['loan_amnt'] > 0]
+    df = df[df['annual_inc'] > 0]
+    df = df[(df['dti'] >= 0) & (df['dti'] <= 100)]
+    return df
+
+
+def filter_loan_status(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep only loans with clear outcomes for supervised learning."""
+    valid_statuses = ['Fully Paid', 'Charged Off', 'Default']
+    return df[df['loan_status'].isin(valid_statuses)].copy()
+
+
+def clean_string_fields(df: pd.DataFrame) -> pd.DataFrame:
+    """Standardize and clean string-based fields."""
+    df['emp_length'] = df['emp_length'].replace('n/a', None)
+    df['purpose'] = df['purpose'].str.lower().str.replace('_', ' ', regex=False)
+    return df
+
+
+def cap_outliers(df: pd.DataFrame) -> pd.DataFrame:
+    """Cap extreme values to the 99th percentile."""
+    df['annual_inc'] = df['annual_inc'].clip(upper=df['annual_inc'].quantile(0.99))
+    return df

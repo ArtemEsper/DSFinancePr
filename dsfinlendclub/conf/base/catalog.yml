@@ -10,8 +10,12 @@ lendingclub:
     compression: infer
     low_memory: False
 
-lsample:
+sample:
   type: pandas.CSVDataset
   filepath: data/01_raw/Loan_status_sample.csv
   load_args:
     compression: infer
+
+clean_data:
+  type: pandas.CSVDataSet
+  filepath: data/02_intermediate/clean_data.csv
