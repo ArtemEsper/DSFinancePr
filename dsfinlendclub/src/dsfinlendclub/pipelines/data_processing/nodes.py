@@ -15,20 +15,22 @@ def check_and_remove_duplicates(df, key="id"):
     key (str): The column to check for duplicates (default is 'id')
 
     Returns:
-    pd.DataFrame: A new DataFrame with duplicates removed
+    Tuple[pd.DataFrame, bool]: Cleaned DataFrame and a flag indicating if any duplicates were found
     """
     duplicate_ids = df[df.duplicated(key, keep=False)][key].unique()
 
-    if len(duplicate_ids) > 0:
+    found_duplicates = len(duplicate_ids) > 0
+
+    if found_duplicates:
         print(f"Found {len(duplicate_ids)} duplicated '{key}' values:")
         print(duplicate_ids)
     else:
         print(f"No duplicates found in column '{key}'.")
 
-    # Drop duplicates, keeping the first occurrence
     df_cleaned = df.drop_duplicates(subset=key, keep="first")
 
-    return df_cleaned
+    return df_cleaned, found_duplicates
+
 
 
 def drop_unwanted_columns(x: pd.DataFrame, drop_list=None) -> pd.DataFrame:
@@ -43,6 +45,7 @@ def drop_unwanted_columns(x: pd.DataFrame, drop_list=None) -> pd.DataFrame:
         pd.DataFrame: A new DataFrame with specified columns dropped.
 
     """
+    print("Dropping columns:", drop_list)
     if drop_list is None:
         drop_list = ["Unnamed: 0.1", "Unnamed: 0"]
 

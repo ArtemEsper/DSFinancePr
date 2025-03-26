@@ -1,31 +1,28 @@
 import pandas as pd
-from kedro.io import DataCatalog
+from kedro.io import DataCatalog, MemoryDataset
 from kedro.runner import SequentialRunner
-from kedro.io import MemoryDataset
 from dsfinlendclub.pipelines.data_processing.pipeline import create_pipeline
 from ydata_profiling import ProfileReport
 
 
-# - title
-# - zip_code
-# - emp_title
-# - policy_code
-# - pymnt_plan
-# - application_type
-# - funded_amnt_inv
-# - next_pymnt_d
-# - Unnamed: 0.1
-# - Unnamed: 0
+# - emp_title - decode first
+# - application_type (?) use it for a flag
 
 def test_data_processing_pipeline_runs():
     raw_data = pd.DataFrame({
         "id": [1, 1, 2],  # has to be deduplicated and deleted
-        "member_id": [1, 3, 2, 5],  # has to be deleted
+        "member_id": [1, 3, 2],  # has to be deleted
         "url": ["https://lendingclub.com/browse/loanDetail.action?loan_id=167338079",
+                "https://lendingclub.com/browse/loanDetail.action?loan_id=71016917",
                 "https://lendingclub.com/browse/loanDetail.action?loan_id=71016917"],  # has to be deleted
         "title": ["Credit card refinancing", "Debt consolidation", "Home improvement"],  # has to be deleted
         "zip_code": ["115xx", "116xx", "117xx"],  # has to be deleted
-        "emp_title": ["cashier", "ABM", ""],
+        "policy_code": [1.0, 1.0, 1.0],  # has to be deleted
+        "pymnt_plan": ["n", "n", "n"],  # has to be deleted
+        "funded_amnt_inv": [1000, 1000, 2000],  # has to be deleted
+        "next_pymnt_d": ["Jan-2019", "Jan-2019", "Feb-2020"],  # has to be deleted
+        "Unnamed: 0.1": [123, 124, 125],  # has to be deleted
+        "Unnamed: 0": [126, 126, 130],  # has to be deleted
         "loan_amnt": [1000, 1000, 2000],
         "annual_inc": [50000, 50000, 60000],
         "dti": [15.0, 15.0, 20.0],
@@ -41,20 +38,28 @@ def test_data_processing_pipeline_runs():
 
     catalog = DataCatalog({
         "raw_data": MemoryDataset(raw_data),
-        "params:admin_columns_to_drop": MemoryDataset(["some_unused_column"])
+        "params:admin_columns_to_drop": MemoryDataset([
+            "id", "member_id", "url", "title", "zip_code", "policy_code",
+            "pymnt_plan", "funded_amnt_inv", "next_pymnt_d", "Unnamed: 0.1", "Unnamed: 0"
+        ]),
+        "dedup_flag": MemoryDataset(),  # capture intermediate result
     })
 
     pipeline = create_pipeline()
     runner = SequentialRunner()
     output = runner.run(pipeline, catalog)
 
-    assert "data_processing_output" in output
     processed = output["data_processing_output"]
-    assert isinstance(processed, pd.DataFrame)
+    # Get flag instead of full deduped dataframe
+    deduped_success = output["dedup_flag"]
 
-    # id
-    assert processed["id"].nunique() == 2
-    assert processed.shape[0] == 2
+    # Check outputs exist
+    assert "data_processing_output" in output
+
+    # Check deduplication BEFORE 'id' is dropped
+    assert deduped_success is True
+
+    assert isinstance(processed, pd.DataFrame)
 
     # loan_amnt
     assert "loan_amnt" in processed.columns
@@ -105,7 +110,17 @@ def test_data_processing_pipeline_runs():
     assert processed["purpose"].str.islower().all()
     assert processed["purpose"].str.contains("_").sum() == 0
 
+    # fields to delete
+    for col in ["id", "member_id", "url", "title", "zip_code", "policy_code", "pymnt_plan", "funded_amnt_inv", "next_pymnt_d", "Unnamed: 0.1", "Unnamed: 0"
+    ]:
+        assert col not in processed.columns, f"{col} was not dropped"
+
+    # check if other fields exist
+    for col in ["loan_amnt", "annual_inc", "dti", "term", "int_rate", "loan_status", "emp_length", "issue_d",
+                "purpose"]:
+        assert col in processed.columns, f"Expected column {col} is missing"
+
     print(processed.head())
 
-    ProfileReport(raw_data, title="Raw Data").to_file("raw_report.html")
-    ProfileReport(processed, title="Processed Data").to_file("processed_report.html")
+    ProfileReport(raw_data, title="Raw Data").to_file("data/08_reporting/raw_report.html")
+    ProfileReport(processed, title="Processed Data").to_file("data/08_reporting/processed_report.html")

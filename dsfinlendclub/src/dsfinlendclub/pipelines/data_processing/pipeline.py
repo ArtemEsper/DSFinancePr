@@ -22,7 +22,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=check_and_remove_duplicates,
                 inputs="raw_data",
-                outputs="deduped_data",
+                outputs=["deduped_data", "dedup_flag"],
                 name="deduplicate_by_id",
             ),
             node(
