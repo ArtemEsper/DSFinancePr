@@ -8,7 +8,6 @@ admin_columns_to_drop:
   - id
   - member_id
   - url
-  - desc
   - title
   - zip_code
   - emp_title

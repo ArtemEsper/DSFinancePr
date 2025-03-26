@@ -19,3 +19,7 @@ sample:
 clean_data:
   type: pandas.CSVDataSet
   filepath: data/02_intermediate/clean_data.csv
+
+emp_title_mapping:
+  type: pandas.CSVDataSet
+  filepath: data/01_raw/emp_title_mapping.csv
