@@ -82,8 +82,8 @@ def test_data_processing_pipeline_runs():
     assert processed["int_rate"].dtype == float
 
     # term
-    assert processed["term"].dtype == object  # (technically str in pandas)
-    assert set(processed["term"].unique()) == {"36 months", "60 months"}
+    assert processed["term"].dtype in [int, "int32", "int64"]
+    assert set(processed["term"].unique()) <= {36, 60}, "Unexpected values in 'term'"
 
     # emp_length
     assert "n/a" not in processed["emp_length"].fillna("").values

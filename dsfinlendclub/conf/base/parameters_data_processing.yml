@@ -14,5 +14,5 @@ admin_columns_to_drop:
   - pymnt_plan
   - funded_amnt_inv
   - next_pymnt_d
-  - Unnamed: 0.1
-  - Unnamed: 0
+  - "Unnamed: 0.1"
+  - "Unnamed: 0"

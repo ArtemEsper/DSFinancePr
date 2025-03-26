@@ -59,7 +59,7 @@ def normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
 
 def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
     """Convert types of term, int_rate, issue_d."""
-    df["term"] = df["term"].astype(str)
+    df['term'] = df['term'].str.extract(r'(\d+)').astype(int)
     df["int_rate"] = df["int_rate"].str.rstrip("%").astype(float)
     df["issue_d"] = pd.to_datetime(df["issue_d"], format="%b-%Y", errors="coerce")
     df["earliest_cr_line"] = pd.to_datetime(
@@ -68,6 +68,10 @@ def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
     df["last_credit_pull_d"] = pd.to_datetime(
         df["last_credit_pull_d"], format="%b-%Y", errors="coerce"
     )
+
+    # Optional: convert remaining object columns to clean strings (for later encoding)
+    for col in df.select_dtypes(include='object').columns:
+        df[col] = df[col].astype(str).str.strip().str.lower()
 
     return df
 
