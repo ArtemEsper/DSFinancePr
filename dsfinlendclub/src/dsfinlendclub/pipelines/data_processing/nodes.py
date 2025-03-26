@@ -58,13 +58,19 @@ def normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
-    """Convert types of term, int_rate, issue_d."""
+    """Convert types of term, int_rate, issue_d, etc."""
     df['term'] = df['term'].str.extract(r'(\d+)').astype(int)
     df["int_rate"] = df["int_rate"].str.rstrip("%").astype(float)
     df["issue_d"] = pd.to_datetime(df["issue_d"], format="%b-%Y", errors="coerce")
     df["earliest_cr_line"] = pd.to_datetime(
         df["earliest_cr_line"], format="%b-%Y", errors="coerce"
     )
+    df["revol_util"] = pd.to_numeric(df["revol_util"].str.rstrip("%"), errors="coerce")
+
+    df["initial_list_status"] = df["initial_list_status"].astype(str).str.lower().str.strip()
+
+    df["sec_app_earliest_cr_line"] = pd.to_datetime(df["sec_app_earliest_cr_line"], format="%b-%Y", errors="coerce")
+
     df["home_ownership"] = (
         df["home_ownership"]
         .astype(str)

@@ -14,7 +14,22 @@ admin_columns_to_drop:
   - pymnt_plan
   - funded_amnt_inv
   - next_pymnt_d
-  - last_credit_pull_d
-  - loan_status
   - "Unnamed: 0.1"
   - "Unnamed: 0"
+  - loan_status
+  - addr_state
+  - last_pymnt_d
+  - last_credit_pull_d
+  - hardship_type
+  - hardship_reason
+  - hardship_start_date
+  - hardship_end_date
+  - hardship_amount
+  - hardship_length
+  - deferral_term
+  - hardship_loan_status
+  - hardship_payoff_balance_amount
+  - hardship_last_payment_amount
+  - orig_projected_additional_accrued_interest
+  - payment_plan_start_date
+  - debt_settlement_flag

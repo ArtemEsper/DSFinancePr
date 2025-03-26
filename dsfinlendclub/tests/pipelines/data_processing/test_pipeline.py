@@ -28,20 +28,46 @@ def test_data_processing_pipeline_runs():
         "dti": [15.0, 15.0, 20.0],
         "int_rate": ["10.5%", "10.5%", "12.3%"],
         "term": ["36 months", "36 months", "60 months"],
-        "loan_status": ["Fully Paid", "Fully Paid", "Charged Off"],
         "emp_length": ["1 year", "n/a", "10+ years"],
         "issue_d": ["Jan-2019", "Jan-2019", "Feb-2020"],
         "earliest_cr_line": ["Jan-2019", "Jan-2019", "Feb-2020"],
         "purpose": ["credit_card", "debt_consolidation", "home_improvement"],
         "home_ownership": ["MORTGAGE", "ANY", "NONE"],
-        "loan_status": ["Fully Paid", "Charged Off", "Issued"]
+        "loan_status": ["Fully Paid", "Charged Off", "Issued"],
+        "addr_state": ["CA", "TX", "FL"],
+        "revol_util": ["47%", "45%", "49%"],
+        "initial_list_status": ["w", "W", "f"],
+        "last_pymnt_d": ["Jan-2019", "Jan-2019", "Feb-2020"],
+        "last_credit_pull_d": ["Jan-2019", "Jan-2019", "Feb-2020"],
+        "application_type": ["Individual", "Individual", "Joint App"],
+        "verification_status_joint": ["Not Verified", "Source Verified", "Verified"],
+        "sec_app_earliest_cr_line": ["Jan-2019", "Jan-2019", "Feb-2020"],
+        "hardship_flag": ["Y", "N", "N"],
+        "hardship_type": ["ST0650PV01", "ST0650PV02", "ST0650PV03"],
+        "hardship_reason": ["Job loss", None, "Medical expenses"],
+        "hardship_start_date": ["Jan-2020", None, "Mar-2020"],
+        "hardship_end_date": ["Apr-2020", None, "Jun-2020"],
+        "hardship_amount": [1000.0, None, 1500.0],
+        "hardship_length": [3, None, 4],
+        "deferral_term": [2, None, 3],
+        "hardship_loan_status": ["Late (31-120 days)", None, "Current"],
+        "hardship_payoff_balance_amount": [5000.0, None, 3200.0],
+        "hardship_last_payment_amount": [150.0, None, 200.0],
+        "orig_projected_additional_accrued_interest": [75.3, None, 45.0],
+        "payment_plan_start_date": ["2020-03-01", None, "2020-06-15"],
+        "debt_settlement_flag": ["N", "Y", "Y"]
     })
 
     catalog = DataCatalog({
         "raw_data": MemoryDataset(raw_data),
         "params:admin_columns_to_drop": MemoryDataset([
             "id", "member_id", "url", "title", "zip_code", "policy_code",
-            "pymnt_plan", "funded_amnt_inv", "next_pymnt_d", "Unnamed: 0.1", "Unnamed: 0"
+            "pymnt_plan", "funded_amnt_inv", "next_pymnt_d", "Unnamed: 0.1", "Unnamed: 0", "loan_status",
+            "addr_state", "last_pymnt_d", "last_credit_pull_d", "hardship_type", "hardship_reason",
+            "hardship_start_date", "hardship_end_date", "hardship_amount", "hardship_length", "deferral_term",
+            "hardship_loan_status", "hardship_payoff_balance_amount", "hardship_last_payment_amount",
+            "hardship_payoff_balance_amount", "hardship_last_payment_amount",
+            "orig_projected_additional_accrued_interest", "payment_plan_start_date", "debt_settlement_flag"
         ]),
         "dedup_flag": MemoryDataset(),  # capture intermediate result
     })
@@ -98,24 +124,15 @@ def test_data_processing_pipeline_runs():
     assert processed['earliest_cr_line'].notnull().all()  # or .any() if you expect nulls
 
     # loan_status
-    assert "loan_status" in processed.columns  # Column must exist
-    expected_statuses = {"Fully Paid", "Charged Off", "Default"}
-    actual_statuses = set(processed["loan_status"].dropna().unique())
-    assert actual_statuses.issubset(expected_statuses)
+    # Check only 3 valid statuses remain
+    valid_statuses = {"Fully Paid", "Charged Off", "Default"}
+    assert set(processed["loan_status"].unique()).issubset(valid_statuses)
+    assert "loan_status_binary" in processed.columns
+    assert set(processed["loan_status_binary"].unique()).issubset({0, 1})  # Check if binary column was created
 
     # purpose
     assert processed["purpose"].str.islower().all()
     assert processed["purpose"].str.contains("_").sum() == 0
-
-    # fields to delete
-    for col in ["id", "member_id", "url", "title", "zip_code", "policy_code", "pymnt_plan", "funded_amnt_inv", "next_pymnt_d", "Unnamed: 0.1", "Unnamed: 0"
-    ]:
-        assert col not in processed.columns, f"{col} was not dropped"
-
-    # check if other fields exist
-    for col in ["loan_amnt", "annual_inc", "dti", "term", "int_rate", "loan_status", "emp_length", "issue_d",
-                "purpose"]:
-        assert col in processed.columns, f"Expected column {col} is missing"
 
     # home_ownership
     assert "home_ownership" in processed.columns
@@ -125,12 +142,34 @@ def test_data_processing_pipeline_runs():
     expected_categories = {"rent", "own", "mortgage", "other"}
     assert set(processed["home_ownership"].dropna().unique()).issubset(expected_categories)
 
-    # loan_status
-    # Check only 3 valid statuses remain
-    valid_statuses = {"Fully Paid", "Charged Off", "Default"}
-    assert set(processed["loan_status"].unique()).issubset(valid_statuses)
-    assert "loan_status_binary" in processed.columns
-    assert set(processed["loan_status_binary"].unique()).issubset({0, 1})  # Check if binary column was created
+    # revol_util
+    assert "revol_util" in processed.columns
+    assert pd.api.types.is_float_dtype(processed["revol_util"])
+    assert processed["revol_util"].dropna().between(0, 200).all()
+
+    # initial_list_status
+    assert "initial_list_status" in processed.columns
+    assert processed["initial_list_status"].str.strip().eq(processed["initial_list_status"]).all()
+    assert processed["initial_list_status"].isin(["f", "w"]).all()
+
+    # sec_app_earliest_cr_line
+    if "sec_app_earliest_cr_line" in processed.columns:
+        assert pd.api.types.is_datetime64_any_dtype(processed["sec_app_earliest_cr_line"])
+
+    # fields to delete
+    for col in ["id", "member_id", "url", "title", "zip_code", "policy_code",
+                "pymnt_plan", "funded_amnt_inv", "next_pymnt_d", "Unnamed: 0.1", "Unnamed: 0", "loan_status",
+                "addr_state", "last_pymnt_d", "last_credit_pull_d", "hardship_type", "hardship_reason",
+                "hardship_start_date", "hardship_end_date", "hardship_amount", "hardship_length", "deferral_term",
+                "hardship_loan_status", "hardship_payoff_balance_amount", "hardship_last_payment_amount",
+                "hardship_payoff_balance_amount", "hardship_last_payment_amount",
+                "orig_projected_additional_accrued_interest", "payment_plan_start_date", "debt_settlement_flag"]:
+        assert col not in processed.columns, f"{col} was not dropped"
+
+    # check if other fields exist
+    for col in ["loan_amnt", "annual_inc", "dti", "term", "int_rate", "emp_length", "issue_d",
+                "purpose", "home_ownership", "application_type", "verification_status_joint", "hardship_flag"]:
+        assert col in processed.columns, f"Expected column {col} is missing"
 
     print(processed.head())
 
