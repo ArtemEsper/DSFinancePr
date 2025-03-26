@@ -13,6 +13,7 @@ from .nodes import (
     filter_loan_status,
     clean_string_fields,
     cap_outliers,
+    filter_and_flag_loan_status,
 )
 
 
@@ -26,8 +27,20 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="deduplicate_by_id",
             ),
             node(
+                func=fix_column_types,
+                inputs="deduped_data",
+                outputs="typed_columns",
+                name="fix_column_types",
+            ),
+            node(
+                func=filter_and_flag_loan_status,
+                inputs="typed_columns",
+                outputs="processed_loan_stat",
+                name="encode_loan_status",
+            ),
+            node(
                 func=drop_unwanted_columns,
-                inputs={"x": "deduped_data", "drop_list": "params:admin_columns_to_drop"},
+                inputs={"x": "processed_loan_stat", "drop_list": "params:admin_columns_to_drop"},
                 outputs="clean_data",
                 name="drop_admin_columns"
             ),
@@ -38,14 +51,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="normalize_column_names",
             ),
             node(
-                func=fix_column_types,
-                inputs="normalized_columns",
-                outputs="typed_columns",
-                name="fix_column_types",
-            ),
-            node(
                 func=remove_invalid_rows,
-                inputs="typed_columns",
+                inputs="normalized_columns",
                 outputs="cleaned_rows",
                 name="remove_invalid_rows",
             ),

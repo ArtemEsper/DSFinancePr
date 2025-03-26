@@ -32,8 +32,9 @@ def test_data_processing_pipeline_runs():
         "emp_length": ["1 year", "n/a", "10+ years"],
         "issue_d": ["Jan-2019", "Jan-2019", "Feb-2020"],
         "earliest_cr_line": ["Jan-2019", "Jan-2019", "Feb-2020"],
-        "last_credit_pull_d": ["Jan-2019", "Jan-2019", "Feb-2020"],
-        "purpose": ["credit_card", "debt_consolidation", "home_improvement"]
+        "purpose": ["credit_card", "debt_consolidation", "home_improvement"],
+        "home_ownership": ["MORTGAGE", "ANY", "NONE"],
+        "loan_status": ["Fully Paid", "Charged Off", "Issued"]
     })
 
     catalog = DataCatalog({
@@ -96,10 +97,6 @@ def test_data_processing_pipeline_runs():
     assert pd.api.types.is_datetime64_any_dtype(processed['earliest_cr_line'])
     assert processed['earliest_cr_line'].notnull().all()  # or .any() if you expect nulls
 
-    # last_credit_pull_d
-    assert pd.api.types.is_datetime64_any_dtype(processed['last_credit_pull_d'])
-    assert processed['last_credit_pull_d'].notnull().all()  # or .any() if you expect nulls
-
     # loan_status
     assert "loan_status" in processed.columns  # Column must exist
     expected_statuses = {"Fully Paid", "Charged Off", "Default"}
@@ -119,6 +116,21 @@ def test_data_processing_pipeline_runs():
     for col in ["loan_amnt", "annual_inc", "dti", "term", "int_rate", "loan_status", "emp_length", "issue_d",
                 "purpose"]:
         assert col in processed.columns, f"Expected column {col} is missing"
+
+    # home_ownership
+    assert "home_ownership" in processed.columns
+    assert processed["home_ownership"].str.islower().all()
+    assert processed["home_ownership"].str.strip().eq(processed["home_ownership"]).all()
+    assert not processed["home_ownership"].isin(["none", "any", "unknown"]).any()
+    expected_categories = {"rent", "own", "mortgage", "other"}
+    assert set(processed["home_ownership"].dropna().unique()).issubset(expected_categories)
+
+    # loan_status
+    # Check only 3 valid statuses remain
+    valid_statuses = {"Fully Paid", "Charged Off", "Default"}
+    assert set(processed["loan_status"].unique()).issubset(valid_statuses)
+    assert "loan_status_binary" in processed.columns
+    assert set(processed["loan_status_binary"].unique()).issubset({0, 1})  # Check if binary column was created
 
     print(processed.head())
 

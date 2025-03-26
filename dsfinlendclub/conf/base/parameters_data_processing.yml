@@ -14,5 +14,7 @@ admin_columns_to_drop:
   - pymnt_plan
   - funded_amnt_inv
   - next_pymnt_d
+  - last_credit_pull_d
+  - loan_status
   - "Unnamed: 0.1"
   - "Unnamed: 0"

@@ -65,14 +65,34 @@ def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
     df["earliest_cr_line"] = pd.to_datetime(
         df["earliest_cr_line"], format="%b-%Y", errors="coerce"
     )
-    df["last_credit_pull_d"] = pd.to_datetime(
-        df["last_credit_pull_d"], format="%b-%Y", errors="coerce"
+    df["home_ownership"] = (
+        df["home_ownership"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .replace({
+            "none": "other",
+            "any": "other",
+            "unknown": "other"
+        })
     )
 
-    # Optional: convert remaining object columns to clean strings (for later encoding)
+    # Converting remaining object columns to clean strings (for later feature encoding)
     for col in df.select_dtypes(include='object').columns:
         df[col] = df[col].astype(str).str.strip().str.lower()
 
+    return df
+
+
+def filter_and_flag_loan_status(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove rows with statuses not present in 'valid' list and encode the rest in binary format."""
+    valid = ["Fully Paid", "Charged Off", "Default"]
+    df = df[df["loan_status"].isin(valid)].copy()
+    df["loan_status_binary"] = df["loan_status"].map({
+        "Fully Paid": 0,
+        "Charged Off": 1,
+        "Default": 1
+    })
     return df
 
 
