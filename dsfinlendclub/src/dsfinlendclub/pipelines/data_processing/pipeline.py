@@ -21,15 +21,15 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             node(
                 func=check_and_remove_duplicates,
-                inputs="raw_data",
+                inputs="lendingclub",  # raw_data dataset in the tests
                 outputs=["deduped_data", "dedup_flag"],
                 name="deduplicate_by_id",
             ),
             node(
                 func=drop_unwanted_columns,
-                inputs=dict(x="deduped_data", drop_list="params:admin_columns_to_drop"),
+                inputs={"x": "deduped_data", "drop_list": "params:admin_columns_to_drop"},
                 outputs="clean_data",
-                name="drop_admin_columns",
+                name="drop_admin_columns"
             ),
             node(
                 func=normalize_column_names,
@@ -64,7 +64,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             node(
                 func=cap_outliers,
                 inputs="cleaned_strings",
-                outputs="data_processing_output",
+                outputs="intermediate_data",
                 name="cap_outliers",
             ),
         ]

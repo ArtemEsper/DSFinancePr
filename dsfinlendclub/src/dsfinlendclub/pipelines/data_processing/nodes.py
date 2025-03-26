@@ -32,7 +32,6 @@ def check_and_remove_duplicates(df, key="id"):
     return df_cleaned, found_duplicates
 
 
-
 def drop_unwanted_columns(x: pd.DataFrame, drop_list=None) -> pd.DataFrame:
     """
     Drops unwanted columns from the DataFrame.
