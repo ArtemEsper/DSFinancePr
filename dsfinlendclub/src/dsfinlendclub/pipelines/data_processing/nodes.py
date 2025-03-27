@@ -62,6 +62,7 @@ def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
     df['term'] = df['term'].str.extract(r'(\d+)').astype(int)
     df["int_rate"] = df["int_rate"].str.rstrip("%").astype(float)
     df["issue_d"] = pd.to_datetime(df["issue_d"], format="%b-%Y", errors="coerce")
+    df["hardship_loan_status"] = df["hardship_loan_status"].astype(str).str.strip().str.title()
     df["earliest_cr_line"] = pd.to_datetime(
         df["earliest_cr_line"], format="%b-%Y", errors="coerce"
     )
@@ -70,6 +71,11 @@ def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
     df["initial_list_status"] = df["initial_list_status"].astype(str).str.lower().str.strip()
 
     df["sec_app_earliest_cr_line"] = pd.to_datetime(df["sec_app_earliest_cr_line"], format="%b-%Y", errors="coerce")
+
+    # Ensure annual_inc_joint is numeric (may contain nulls)
+    df["annual_inc_joint"] = pd.to_numeric(df["annual_inc_joint"], errors="coerce")
+
+    df["dti_joint"] = pd.to_numeric(df["dti_joint"], errors="coerce")
 
     df["home_ownership"] = (
         df["home_ownership"]
@@ -107,7 +113,9 @@ def remove_invalid_rows(df: pd.DataFrame) -> pd.DataFrame:
     df = df[df["loan_amnt"] > 0]
     df = df[df["annual_inc"] > 0]
     df = df[(df["dti"] >= 0) & (df["dti"] <= 100)]
+    df = df[(df["dti_joint"].isna()) | ((df["dti_joint"] >= 0) & (df["dti_joint"] <= 100))]
     return df
+
 
 
 def filter_loan_status(df: pd.DataFrame) -> pd.DataFrame:
@@ -126,4 +134,6 @@ def clean_string_fields(df: pd.DataFrame) -> pd.DataFrame:
 def cap_outliers(df: pd.DataFrame) -> pd.DataFrame:
     """Cap extreme values to the 99th percentile."""
     df["annual_inc"] = df["annual_inc"].clip(upper=df["annual_inc"].quantile(0.99))
+    df["annual_inc_joint"] = df["annual_inc_joint"].clip(upper=df["annual_inc_joint"].quantile(0.99))
+
     return df
