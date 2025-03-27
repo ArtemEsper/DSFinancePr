@@ -59,38 +59,55 @@ def normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
 
 def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
     """Convert types of term, int_rate, issue_d, etc."""
-    df['term'] = df['term'].str.extract(r'(\d+)').astype(int)
+    df["term"] = df["term"].str.extract(r"(\d+)").astype(int)
     df["int_rate"] = df["int_rate"].str.rstrip("%").astype(float)
     df["issue_d"] = pd.to_datetime(df["issue_d"], format="%b-%Y", errors="coerce")
-    df["hardship_loan_status"] = df["hardship_loan_status"].astype(str).str.strip().str.title()
+    df["hardship_loan_status"] = (
+        df["hardship_loan_status"].astype(str).str.strip().str.title()
+    )
     df["earliest_cr_line"] = pd.to_datetime(
         df["earliest_cr_line"], format="%b-%Y", errors="coerce"
     )
     df["revol_util"] = pd.to_numeric(df["revol_util"].str.rstrip("%"), errors="coerce")
 
-    df["initial_list_status"] = df["initial_list_status"].astype(str).str.lower().str.strip()
+    df["initial_list_status"] = (
+        df["initial_list_status"].astype(str).str.lower().str.strip()
+    )
 
-    df["sec_app_earliest_cr_line"] = pd.to_datetime(df["sec_app_earliest_cr_line"], format="%b-%Y", errors="coerce")
+    df["sec_app_earliest_cr_line"] = pd.to_datetime(
+        df["sec_app_earliest_cr_line"], format="%b-%Y", errors="coerce"
+    )
 
     # Ensure annual_inc_joint is numeric (may contain nulls)
     df["annual_inc_joint"] = pd.to_numeric(df["annual_inc_joint"], errors="coerce")
 
     df["dti_joint"] = pd.to_numeric(df["dti_joint"], errors="coerce")
 
+    df["hardship_dpd"] = pd.to_numeric(df["hardship_dpd"], errors="coerce")
+
+    df["mths_since_last_record"] = pd.to_numeric(
+        df["mths_since_last_record"], errors="coerce"
+    )
+
+    # Clean and standardize verification_status fields
+    for col in ["verification_status", "verification_status_joint"]:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.strip().str.lower()
+
+    for col in ["revol_bal", "revol_bal_joint"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
     df["home_ownership"] = (
         df["home_ownership"]
         .astype(str)
         .str.strip()
         .str.lower()
-        .replace({
-            "none": "other",
-            "any": "other",
-            "unknown": "other"
-        })
+        .replace({"none": "other", "any": "other", "unknown": "other"})
     )
 
     # Converting remaining object columns to clean strings (for later feature encoding)
-    for col in df.select_dtypes(include='object').columns:
+    for col in df.select_dtypes(include="object").columns:
         df[col] = df[col].astype(str).str.strip().str.lower()
 
     return df
@@ -100,11 +117,9 @@ def filter_and_flag_loan_status(df: pd.DataFrame) -> pd.DataFrame:
     """Remove rows with statuses not present in 'valid' list and encode the rest in binary format."""
     valid = ["Fully Paid", "Charged Off", "Default"]
     df = df[df["loan_status"].isin(valid)].copy()
-    df["loan_status_binary"] = df["loan_status"].map({
-        "Fully Paid": 0,
-        "Charged Off": 1,
-        "Default": 1
-    })
+    df["loan_status_binary"] = df["loan_status"].map(
+        {"Fully Paid": 0, "Charged Off": 1, "Default": 1}
+    )
     return df
 
 
@@ -113,9 +128,10 @@ def remove_invalid_rows(df: pd.DataFrame) -> pd.DataFrame:
     df = df[df["loan_amnt"] > 0]
     df = df[df["annual_inc"] > 0]
     df = df[(df["dti"] >= 0) & (df["dti"] <= 100)]
-    df = df[(df["dti_joint"].isna()) | ((df["dti_joint"] >= 0) & (df["dti_joint"] <= 100))]
+    df = df[
+        (df["dti_joint"].isna()) | ((df["dti_joint"] >= 0) & (df["dti_joint"] <= 100))
+    ]
     return df
-
 
 
 def filter_loan_status(df: pd.DataFrame) -> pd.DataFrame:
@@ -133,7 +149,14 @@ def clean_string_fields(df: pd.DataFrame) -> pd.DataFrame:
 
 def cap_outliers(df: pd.DataFrame) -> pd.DataFrame:
     """Cap extreme values to the 99th percentile."""
-    df["annual_inc"] = df["annual_inc"].clip(upper=df["annual_inc"].quantile(0.99))
-    df["annual_inc_joint"] = df["annual_inc_joint"].clip(upper=df["annual_inc_joint"].quantile(0.99))
+    for col in [
+        "revol_bal",
+        "revol_bal_joint",
+        "annual_inc",
+        "annual_inc_joint",
+        "hardship_dpd",
+    ]:
+        if col in df.columns:
+            df[col] = df[col].clip(upper=df[col].quantile(0.99))
 
     return df

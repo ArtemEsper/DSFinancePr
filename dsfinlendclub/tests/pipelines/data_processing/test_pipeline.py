@@ -36,15 +36,16 @@ def test_data_processing_pipeline_runs():
         "purpose": ["credit_card", "debt_consolidation", "home_improvement"],  # ✅ retain
         "home_ownership": ["MORTGAGE", "ANY", "NONE"],  # 🧠 remain and processed at this stage
         "loan_status": ["Fully Paid", "Charged Off", "Issued"],  # ⚠️ ❌ converted to binary 'loan_status_binary'
-        "addr_state": ["CA", "TX", "FL"], # ❌ has to be deleted
+        "addr_state": ["CA", "TX", "FL"],  # ❌ has to be deleted
         "revol_util": ["47%", "45%", "49%"],  # ✅ retain
         "initial_list_status": ["w", "W", "f"],  # ✅ retain
         "last_pymnt_d": ["Jan-2019", "Jan-2019", "Feb-2020"],  # ❌ has to be deleted
         "last_credit_pull_d": ["Jan-2019", "Jan-2019", "Feb-2020"],  # ❌ has to be deleted
-        "application_type": ["Individual", "Individual", "Joint App"],  # ✅ retain
-        "verification_status_joint": ["Not Verified", "Source Verified", "Verified"],  # ✅ retain
-        "sec_app_earliest_cr_line": ["Jan-2019", "Jan-2019", "Feb-2020"],  # ✅ retain
-        "hardship_flag": ["Y", "N", "N"],  # ✅ retain
+        "application_type": ["Individual", "Individual", "Joint App"],  # ✅ retain => lower case
+        "verification_status": ["Not Verified", "Source Verified", "Verified"],  # ✅ retain => lower case
+        "verification_status_joint": ["Not Verified", "Source Verified", "Verified"],  # ✅ retain => lower case
+        "sec_app_earliest_cr_line": ["Jan-2019", "Jan-2019", "Feb-2020"],  # ✅ retain => lower case
+        "hardship_flag": ["Y", "N", "N"],  # ✅ retain => lower case
         "hardship_type": ["ST0650PV01", "ST0650PV02", "ST0650PV03"],  # ❌ has to be deleted
         "hardship_reason": ["Job loss", None, "Medical expenses"],  # ❌ has to be deleted
         "hardship_start_date": ["Jan-2020", None, "Mar-2020"],  # ❌ has to be deleted
@@ -67,11 +68,18 @@ def test_data_processing_pipeline_runs():
         "sec_app_open_act_il": [2, None, 3],  # ❌ has to be deleted
         "sec_app_num_rev_accts": [8, None, 10],  # ❌ has to be deleted
         "sec_app_chargeoff_within_12_mths": [0, None, 0],  # ❌ has to be deleted
-        "sec_app_collections_12_mths_ex_med": [0, None, 1]  # ❌ has to be deleted
+        "sec_app_collections_12_mths_ex_med": [0, None, 1],  # ❌ has to be deleted
+        "revol_bal": [6244.0, 6244.0, 100000.0],  # ✅ retain => float
+        "revol_bal_joint": [2244.0, 99244.0, 100300.0],  # ✅ retain => float
+        "hardship_dpd": [10.0, None, 35.0],  # ✅ retain => float
+        "mths_since_last_record": [70.0, 30.0, None]  # ✅ retain => float
+        "grade": [],
+        "sub_grade": [],
+        "emp_title": [],
     })
 
     catalog = DataCatalog({
-        "raw_data": MemoryDataset(raw_data), # change to 'sample' or 'lendingclub' to test actual datasets
+        "raw_data": MemoryDataset(raw_data),  # change to 'sample' or 'lendingclub' to test actual datasets
         "params:admin_columns_to_drop": MemoryDataset([
             "id", "member_id", "url", "title", "zip_code", "policy_code",
             "pymnt_plan", "funded_amnt_inv", "next_pymnt_d", "Unnamed: 0.1", "Unnamed: 0", "loan_status",
@@ -159,7 +167,7 @@ def test_data_processing_pipeline_runs():
 
     # revol_util
     assert pd.api.types.is_float_dtype(processed["revol_util"])
-    assert processed["revol_util"].dropna().between(0, 200).all()
+    assert processed["revol_util"].dropna().between(0, 100).all()
 
     # initial_list_status
     assert processed["initial_list_status"].str.strip().eq(processed["initial_list_status"]).all()
@@ -178,6 +186,27 @@ def test_data_processing_pipeline_runs():
     assert pd.api.types.is_numeric_dtype(processed["dti_joint"])
     assert processed["dti_joint"].dropna().between(0, 100).all()
 
+    # verification_status and verification_status_joint
+    expected_values = {"not verified", "source verified", "verified"}
+    for col in ["verification_status", "verification_status_joint"]:
+        if col in processed.columns:
+            assert processed[col].dropna().isin(expected_values).all()
+
+    # revol_bal and revol_bal_joint
+    for col in ["revol_bal", "revol_bal_joint"]:
+        if col in processed.columns:
+            assert pd.api.types.is_numeric_dtype(processed[col])
+            assert processed[col].dropna().between(0, processed[col].quantile(0.99)).all()
+
+    # hardship_dpd
+    assert pd.api.types.is_numeric_dtype(processed["hardship_dpd"])
+
+    # mths_since_last_record
+    assert pd.api.types.is_numeric_dtype(processed["mths_since_last_record"])
+    # Just check that no exceptions occur due to mixed types
+    processed["mths_since_last_record"].dropna().apply(lambda x: isinstance(x, (int, float)))
+    assert processed["mths_since_last_record"].isna().any()  # Expect NaNs at this point
+
     # fields to delete
     for col in ["id", "member_id", "url", "title", "zip_code", "policy_code",
                 "pymnt_plan", "funded_amnt_inv", "next_pymnt_d", "Unnamed: 0.1", "Unnamed: 0", "loan_status",
@@ -193,9 +222,10 @@ def test_data_processing_pipeline_runs():
 
     # check if other fields exist
     for col in ["loan_amnt", "annual_inc", "dti", "term", "int_rate", "emp_length", "issue_d",
-                "purpose", "home_ownership", "application_type", "verification_status_joint", "hardship_flag",
-                "sec_app_earliest_cr_line", "earliest_cr_line", "hardship_loan_status", "initial_list_status",
-                "revol_util", "annual_inc_joint", "dti_joint"]:
+                "purpose", "home_ownership", "application_type", "verification_status", "verification_status_joint",
+                "hardship_flag", "sec_app_earliest_cr_line", "earliest_cr_line", "hardship_loan_status",
+                "initial_list_status", "revol_util", "annual_inc_joint", "dti_joint", "revol_bal", "revol_bal_joint",
+                "hardship_dpd", "mths_since_last_record"]:
         assert col in processed.columns, f"Expected column {col} is missing"
 
     print(processed.head())

@@ -40,9 +40,12 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
             node(
                 func=drop_unwanted_columns,
-                inputs={"x": "processed_loan_stat", "drop_list": "params:admin_columns_to_drop"},
+                inputs={
+                    "x": "processed_loan_stat",
+                    "drop_list": "params:admin_columns_to_drop",
+                },
                 outputs="clean_data",
-                name="drop_admin_columns"
+                name="drop_admin_columns",
             ),
             node(
                 func=normalize_column_names,
