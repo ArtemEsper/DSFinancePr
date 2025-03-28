@@ -8,17 +8,20 @@ import pandas as pd
 
 def check_and_remove_duplicates(df, key="id"):
     """
-    Check and remove duplicate entries based on a key column.
+    Check and remove duplicate entries based on a key column, if it exists.
 
     Parameters:
-    df (pd.DataFrame): The input DataFrame
-    key (str): The column to check for duplicates (default is 'id')
+        df (pd.DataFrame): The input DataFrame.
+        key (str): The column to check for duplicates (default is 'id').
 
     Returns:
-    Tuple[pd.DataFrame, bool]: Cleaned DataFrame and a flag indicating if any duplicates were found
+        Tuple[pd.DataFrame, bool]: Cleaned DataFrame and a flag indicating if any duplicates were found.
     """
-    duplicate_ids = df[df.duplicated(key, keep=False)][key].unique()
+    if key not in df.columns:
+        print(f"Column '{key}' not found. Skipping deduplication.")
+        return df, False
 
+    duplicate_ids = df[df.duplicated(key, keep=False)][key].unique()
     found_duplicates = len(duplicate_ids) > 0
 
     if found_duplicates:
@@ -30,6 +33,7 @@ def check_and_remove_duplicates(df, key="id"):
     df_cleaned = df.drop_duplicates(subset=key, keep="first")
 
     return df_cleaned, found_duplicates
+
 
 
 def drop_unwanted_columns(x: pd.DataFrame, drop_list=None) -> pd.DataFrame:
@@ -78,6 +82,9 @@ def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
         df["sec_app_earliest_cr_line"], format="%b-%Y", errors="coerce"
     )
 
+    df["mths_since_last_major_derog"] = df["mths_since_last_major_derog"].fillna(999)
+    df["mths_since_last_major_derog"] = df["mths_since_last_major_derog"].clip(upper=300)
+
     # Ensure annual_inc_joint is numeric (may contain nulls)
     df["annual_inc_joint"] = pd.to_numeric(df["annual_inc_joint"], errors="coerce")
 
@@ -111,6 +118,34 @@ def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
         df[col] = df[col].astype(str).str.strip().str.lower()
 
     return df
+
+
+def encode_joint_application_flag(df):
+    """
+    Encodes a binary flag for joint applications from 'application_type' column,
+    if it is present. If 'application_type' is missing but 'is_joint_app' exists,
+    the function does nothing. If both are missing, defaults to 0.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame possibly containing 'application_type' or 'is_joint_app'.
+
+    Returns:
+        pd.DataFrame: Updated DataFrame with 'is_joint_app' column.
+    """
+    if "application_type" in df.columns:
+        df["is_joint_app"] = (df["application_type"].str.lower() == "joint app").astype(int)
+        df.drop(columns=["application_type"], inplace=True)
+
+    elif "is_joint_app" in df.columns:
+        # Column already exists — leave as is
+        pass
+
+    else:
+        # Neither column present — default to individual
+        df["is_joint_app"] = 0
+
+    return df
+
 
 
 def filter_and_flag_loan_status(df: pd.DataFrame) -> pd.DataFrame:

@@ -5,6 +5,9 @@
 # Link: https://docs.kedro.org/en/0.19.8/configuration/parameters.html
 
 admin_columns_to_drop:
+  - "Unnamed: 0.1"
+  - "Unnamed: 0"
+  - emp_title
   - id
   - member_id
   - url
@@ -14,8 +17,6 @@ admin_columns_to_drop:
   - pymnt_plan
   - funded_amnt_inv
   - next_pymnt_d
-  - "Unnamed: 0.1"
-  - "Unnamed: 0"
   - loan_status
   - addr_state
   - last_pymnt_d
@@ -42,3 +43,59 @@ admin_columns_to_drop:
   - sec_app_num_rev_accts
   - sec_app_chargeoff_within_12_mths
   - sec_app_collections_12_mths_ex_med
+  - out_prncp
+  - out_prncp_inv
+  - total_pymnt
+  - total_pymnt_inv
+  - total_rec_prncp
+  - total_rec_int
+  - total_rec_late_fee
+  - recoveries
+  - collection_recovery_fee
+  - last_pymnt_amnt
+  - last_fico_range_high
+  - last_fico_range_low
+  - hardship_status
+  - collections_12_mths_ex_med
+  - chargeoff_within_12_mths
+  - mths_since_recent_bc
+  - open_il_24m
+  - mths_since_rcnt_il
+  - total_bal_il
+  - il_util
+  - open_rv_12m
+  - open_rv_24m
+  - max_bal_bc
+  - all_util
+  - total_rev_hi_lim
+  - bc_open_to_buy
+  - bc_util
+  - delinq_amnt
+  - inq_fi
+  - total_cu_tl
+  - inq_last_12m
+  - acc_open_past_24mths
+  - mo_sin_old_il_acct
+  - mo_sin_old_rev_tl_op
+  - mo_sin_rcnt_rev_tl_op
+  - mo_sin_rcnt_tl
+  - mort_acc
+  - num_accts_ever_120_pd
+  - num_actv_bc_tl
+  - num_actv_rev_tl
+  - num_bc_sats
+  - num_bc_tl
+  - num_il_tl
+  - num_op_rev_tl
+  - num_rev_accts
+  - num_rev_tl_bal_gt_0
+  - num_sats
+  - num_tl_120dpd_2m
+  - num_tl_30dpd
+  - num_tl_90g_dpd_24m
+  - pct_tl_nvr_dlq
+  - percent_bc_gt_75
+  - tot_hi_cred_lim
+  - total_bal_ex_mort
+  - total_bc_limit
+  - total_il_high_credit_limit

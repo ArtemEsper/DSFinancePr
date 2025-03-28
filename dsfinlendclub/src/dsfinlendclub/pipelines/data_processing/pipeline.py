@@ -14,6 +14,7 @@ from .nodes import (
     clean_string_fields,
     cap_outliers,
     filter_and_flag_loan_status,
+    encode_joint_application_flag,
 )
 
 
@@ -33,8 +34,14 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="fix_column_types",
             ),
             node(
+                func=encode_joint_application_flag,
+                inputs="deduped_data",
+                outputs="encoded_app_type",
+                name="fix_column_types",
+            ),
+            node(
                 func=filter_and_flag_loan_status,
-                inputs="typed_columns",
+                inputs="encoded_app_type",
                 outputs="processed_loan_stat",
                 name="encode_loan_status",
             ),
