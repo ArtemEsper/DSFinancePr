@@ -5,8 +5,8 @@
 # Link: https://docs.kedro.org/en/0.19.8/configuration/parameters.html
 
 admin_columns_to_drop:
-  - "Unnamed: 0.1"
-  - "Unnamed: 0"
+  - "unnamed: 0.1"
+  - "unnamed: 0"
   - emp_title
   - id
   - member_id

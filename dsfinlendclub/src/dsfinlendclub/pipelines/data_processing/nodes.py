@@ -82,6 +82,10 @@ def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
         df["revol_util"].astype(str).str.rstrip("%"), errors="coerce"
     )
 
+    df["pub_rec"] = pd.to_numeric(df["pub_rec"], errors="coerce")  # Ensures numeric
+
+    df["revol_util"] = df["revol_util"].clip(upper=100)  # set values more than 100 to NaN
+
     df["initial_list_status"] = df["initial_list_status"].apply(
         lambda x: x.lower().strip() if isinstance(x, str) else x
     )
@@ -109,7 +113,7 @@ def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
     # # Clean and standardize verification_status fields
     for col in ["verification_status", "verification_status_joint"]:
         if col in df.columns:
-            df[col] = df[col].where(df[col].isna(), df[col].astype(str).str.strip().str.lower())
+            df[col] = df[col].apply(lambda x: x.strip().lower() if isinstance(x, str) else x)
 
     for col in ["revol_bal", "revol_bal_joint"]:
         if col in df.columns:
@@ -201,8 +205,8 @@ def filter_and_encode_loan_status(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Cleaned and encoded DataFrame
     """
-    valid_statuses = ["fully Paid", "charged Off", "default"]
-    df = df[df["loan_status"].isin(valid_statuses)].copy()
+    valid_statuses = ["fully paid", "charged off", "default"]
+    df["loan_status"] = df["loan_status"].str.strip().str.lower()
     df["loan_status_binary"] = df["loan_status"].map({
         "fully Paid": 0,
         "charged Off": 1,

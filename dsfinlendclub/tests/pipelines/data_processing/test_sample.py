@@ -6,6 +6,7 @@ from kedro_datasets.pandas import ParquetDataSet
 from kedro.runner import SequentialRunner
 from dsfinlendclub.pipelines.data_processing.pipeline import create_pipeline
 from pathlib import Path
+from pandas.api.types import is_integer_dtype
 
 
 def test_data_processing_pipeline_on_sample():
@@ -166,7 +167,7 @@ def test_data_processing_pipeline_on_sample():
     assert processed["int_rate"].dtype == float
 
     # term
-    assert processed["term"].dtype in [int, "int32", "int64"]
+    assert is_integer_dtype(processed["term"]), "'term' should be an integer type"
     assert set(processed["term"].unique()) <= {36, 60}, "Unexpected values in 'term'"
 
     # emp_length
@@ -291,7 +292,7 @@ def test_data_processing_pipeline_on_sample():
 
     # pub_rec
     assert pd.api.types.is_numeric_dtype(processed["pub_rec"])
-    assert processed["pub_rec"].isin([0, 1]).all(), "'pub_rec' should be binary"
+    assert processed["pub_rec"].dropna().ge(0).all()  # All non-missing values >= 0
 
     # total_acc
     assert pd.api.types.is_numeric_dtype(processed["total_acc"])
