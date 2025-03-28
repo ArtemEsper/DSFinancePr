@@ -20,8 +20,14 @@ emp_title_mapping:
   type: pandas.CSVDataset
   filepath: data/01_raw/emp_title_mapping.csv
 
+intermediate_mock_data:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/preprocessed_mock_data.csv
+
+intermediate_sample_data:
+  type: pandas.ParquetDataSet
+  filepath: data/02_intermediate/preprocessed_sample_data.pq
+
 intermediate_data:
   type: pandas.ParquetDataSet
   filepath: data/02_intermediate/preprocessed_lc_data.pq
-
-

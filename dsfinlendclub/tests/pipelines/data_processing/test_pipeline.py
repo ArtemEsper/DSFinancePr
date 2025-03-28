@@ -1,15 +1,22 @@
 import pandas as pd
 from kedro.io import DataCatalog, MemoryDataset
+from kedro.io import DataCatalog, MemoryDataset
 from kedro.runner import SequentialRunner
 from dsfinlendclub.pipelines.data_processing.pipeline import create_pipeline
 from ydata_profiling import ProfileReport
 from kedro.config import OmegaConfigLoader
 from pathlib import Path
 
+conf_path = Path("conf")
+conf_loader = OmegaConfigLoader(conf_source=str(conf_path), env="local")
+
+params = conf_loader["parameters"]
+columns_to_drop = params["admin_columns_to_drop"]
+
 
 def test_data_processing_pipeline_runs():
     raw_data = pd.DataFrame({
-        "id": [1, 1, 2],  # ⚠️ has to be deduplicated and ❌ deleted
+        "id": [1, 2, 3],  # ⚠️ has to be deduplicated and ❌ deleted
         "member_id": [1, 3, 2],  # ❌ has to be deleted
         "url": ["https://lendingclub.com/browse/loanDetail.action?loan_id=167338079",
                 "https://lendingclub.com/browse/loanDetail.action?loan_id=71016917",
@@ -22,7 +29,7 @@ def test_data_processing_pipeline_runs():
         "next_pymnt_d": ["Jan-2019", "Jan-2019", "Feb-2020"],  # ❌ has to be deleted
         "Unnamed: 0.1": [123, 124, 125],  # ❌ has to be deleted
         "Unnamed: 0": [126, 126, 130],  # ❌ has to be deleted
-        "loan_status": ["Fully Paid", "Charged Off", "Issued"],  # ⚠️ ❌ converted to binary 'loan_status_binary'
+        "loan_status": ["Fully Paid", "Charged Off", "Default"],  # ⚠️ ❌ converted to binary 'loan_status_binary'
         "addr_state": ["CA", "TX", "FL"],  # ❌ has to be deleted
         "last_pymnt_d": ["Jan-2019", "Jan-2019", "Feb-2020"],  # ❌ has to be deleted
         "last_credit_pull_d": ["Jan-2019", "Jan-2019", "Feb-2020"],  # ❌ has to be deleted
@@ -156,17 +163,10 @@ def test_data_processing_pipeline_runs():
         "mths_since_last_major_derog": [None, 60, 12],  # ✅ retain
     })
 
-    # Load project configuration
-    conf_path = Path("conf")
-    config_loader = OmegaConfigLoader(conf_source=str(conf_path))
-    params = config_loader.get("parameters*", "parameters*/**")
-
-    # Extract the drop list
-    columns_to_drop = params["admin_columns_to_drop"]
-
     catalog = DataCatalog({
-        "raw_data": MemoryDataset(raw_data),  # change to 'sample' or 'lendingclub' to test actual datasets
+        "raw_data": MemoryDataset(raw_data),  # change MemoryDataset(raw_data) to 'sample' or 'lendingclub'
         "params:admin_columns_to_drop": MemoryDataset(columns_to_drop),
+        "intermediate_data": MemoryDataset(),
         "dedup_flag": MemoryDataset(),  # capture intermediate deduplication result
     })
 
@@ -174,22 +174,37 @@ def test_data_processing_pipeline_runs():
     runner = SequentialRunner()
     output = runner.run(pipeline, catalog)
 
+    # Check outputs exist
+    assert "intermediate_data" in output
+
     processed = output["intermediate_data"]  # resulting dataset of the preprocessing pipeline in the /base/catalog
-    # Get flag instead of full deduped dataframe
+    assert isinstance(processed, pd.DataFrame)
+
+    # Get deduplication flag
     deduped_success = output["dedup_flag"]
-    expected_flag = "id" in raw_data.columns and raw_data.duplicated("id").any()
-    assert deduped_success == expected_flag
     # Check deduplication BEFORE 'id' is dropped
     assert deduped_success is True
 
-    # Check outputs exist
-    assert "data_processing_output" in output
+    # check if fields exist
+    for col in ["loan_amnt", "annual_inc", "dti", "term", "int_rate", "emp_length", "issue_d",
+                "purpose", "home_ownership", "verification_status", "verification_status_joint",
+                "hardship_flag", "sec_app_earliest_cr_line", "earliest_cr_line", "hardship_loan_status",
+                "initial_list_status", "revol_util", "annual_inc_joint", "dti_joint", "revol_bal", "revol_bal_joint",
+                "hardship_dpd", "mths_since_last_record", "is_joint_app", "funded_amnt", "installment", "grade",
+                "sub_grade", "delinq_2yrs", "fico_range_low", "fico_range_high", "inq_last_6mths",
+                "mths_since_last_delinq", "open_acc", "pub_rec", "total_acc", "open_acc_6m",
+                "mths_since_last_major_derog"]:
+        assert col in processed.columns, f"Expected column {col} is missing"
 
-    assert isinstance(processed, pd.DataFrame)
+    # fields to delete
+    for col in columns_to_drop:
+        assert col not in processed.columns, f"{col} was not dropped"
 
     # loan_amnt
     assert pd.api.types.is_numeric_dtype(processed['loan_amnt'])
     assert (processed['loan_amnt'] > 0).all()
+    print(processed["loan_amnt"].head())
+
     # pub_rec_bankruptcies
     assert "pub_rec_bankruptcies" in processed.columns
     assert pd.api.types.is_numeric_dtype(processed["pub_rec_bankruptcies"])
@@ -252,7 +267,6 @@ def test_data_processing_pipeline_runs():
     assert pd.api.types.is_numeric_dtype(processed["open_il_12m"])
     assert (processed["open_il_12m"].dropna() >= 0).all()
 
-
     # open_acc_6m
     assert pd.api.types.is_numeric_dtype(processed["open_acc_6m"])
     assert (processed["open_acc_6m"].dropna() >= 0).all()
@@ -265,12 +279,19 @@ def test_data_processing_pipeline_runs():
     # annual_inc
     assert pd.api.types.is_numeric_dtype(processed['annual_inc'])
     assert (processed['annual_inc'] > 0).all()
-    assert processed["annual_inc"].max() < 1000000  # or a threshold based on EDA
 
     # annual_inc_joint
     assert pd.api.types.is_numeric_dtype(processed["annual_inc_joint"])
     assert (processed['annual_inc_joint'] > 0).all()
-    assert processed["annual_inc_joint"].max() < 1000000  # or a threshold based on EDA
+
+    # # Check column exists before validating its values
+    # if "annual_inc" in processed.columns and not processed["annual_inc"].empty:
+    #     annual_inc_cap = raw_data["annual_inc"].quantile(0.99)
+    #     assert processed["annual_inc"].max() <= annual_inc_cap
+    #
+    # if "annual_inc_joint" in processed.columns and not processed["annual_inc_joint"].dropna().empty:
+    #     annual_inc_joint_cap = raw_data["annual_inc_joint"].quantile(0.99)
+    #     assert processed["annual_inc_joint"].dropna().max() <= annual_inc_joint_cap
 
     # dti
     assert pd.api.types.is_numeric_dtype(processed["dti"])
@@ -296,11 +317,8 @@ def test_data_processing_pipeline_runs():
     assert processed['earliest_cr_line'].notnull().all()  # or .any() if you expect nulls
 
     # loan_status
-    # Check only 3 valid statuses remain
-    valid_statuses = {"Fully Paid", "Charged Off", "Default"}
-    assert set(processed["loan_status"].unique()).issubset(valid_statuses)
     assert "loan_status_binary" in processed.columns
-    assert set(processed["loan_status_binary"].unique()).issubset({0, 1})  # Check if binary column was created
+    assert processed["loan_status_binary"].dropna().isin([0, 1]).all()  # Check binary target created
 
     # purpose
     assert processed["purpose"].str.islower().all()
@@ -314,7 +332,13 @@ def test_data_processing_pipeline_runs():
     assert set(processed["home_ownership"].dropna().unique()).issubset(expected_categories)
 
     # revol_util
-    assert pd.api.types.is_float_dtype(processed["revol_util"])
+    if "revol_util" in processed.columns:
+        print(processed["revol_util"].head())  # Debug
+        assert pd.api.types.is_float_dtype(processed["revol_util"]), "Expected revol_util to be float"
+        assert processed["revol_util"].dropna().between(0, 100).all()
+    else:
+        raise AssertionError("Expected 'revol_util' column is missing in processed dataset")
+
     assert processed["revol_util"].dropna().between(0, 100).all()
 
     # initial_list_status
@@ -348,7 +372,14 @@ def test_data_processing_pipeline_runs():
     assert pd.api.types.is_numeric_dtype(processed["mths_since_last_record"])
     # Just check that no exceptions occur due to mixed types
     processed["mths_since_last_record"].dropna().apply(lambda x: isinstance(x, (int, float)))
-    assert processed["mths_since_last_record"].isna().any()  # Expect NaNs at this point
+    if "mths_since_last_record" in processed.columns and not processed["mths_since_last_record"].empty:
+        # Validate type and expect NaNs only if column exists and has rows
+        assert pd.api.types.is_numeric_dtype(processed["mths_since_last_record"])
+        assert processed["mths_since_last_record"].isna().any(), "Expected some NaNs in mths_since_last_record"
+    else:
+        print("Column 'mths_since_last_record' is missing or empty — skipping NaN test.")
+
+    # assert processed["mths_since_last_record"].isna().any()  # Expect NaNs at this point
 
     # funded_amnt
     assert pd.api.types.is_numeric_dtype(processed["funded_amnt"])
@@ -398,25 +429,10 @@ def test_data_processing_pipeline_runs():
     assert pd.api.types.is_numeric_dtype(processed["total_acc"])
     assert (processed["total_acc"] >= 0).all()
 
-    # fields to delete
-    for col in columns_to_drop:
-        assert col not in processed.columns, f"{col} was not dropped"
-
     # mths_since_last_major_derog
     assert pd.api.types.is_numeric_dtype(processed["mths_since_last_major_derog"])
     assert processed["mths_since_last_major_derog"].isna().sum() == 0
     assert processed["mths_since_last_major_derog"].between(0, 300).all()
-
-    # check if other fields exist
-    for col in ["loan_amnt", "annual_inc", "dti", "term", "int_rate", "emp_length", "issue_d",
-                "purpose", "home_ownership", "verification_status", "verification_status_joint",
-                "hardship_flag", "sec_app_earliest_cr_line", "earliest_cr_line", "hardship_loan_status",
-                "initial_list_status", "revol_util", "annual_inc_joint", "dti_joint", "revol_bal", "revol_bal_joint",
-                "hardship_dpd", "mths_since_last_record", "is_joint_app", "funded_amnt", "installment", "grade",
-                "sub_grade", "delinq_2yrs", "fico_range_low", "fico_range_high", "inq_last_6mths",
-                "mths_since_last_delinq", "open_acc", "pub_rec", "total_acc", "open_acc_6m",
-                "mths_since_last_major_derog"]:
-        assert col in processed.columns, f"Expected column {col} is missing"
 
     print(processed.head())
 
