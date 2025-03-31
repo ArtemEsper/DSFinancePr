@@ -64,11 +64,11 @@ def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
     """Convert types of term, int_rate, issue_d, etc."""
     df["term"] = pd.to_numeric(
         df["term"].str.extract(r"(\d+)")[0], errors="coerce"
-    ).astype("Int64")  # nullable integer dtype
+    ).astype(
+        "Int64"
+    )  # nullable integer dtype
 
-    df["int_rate"] = pd.to_numeric(
-        df["int_rate"].str.rstrip("%"), errors="coerce"
-    )
+    df["int_rate"] = pd.to_numeric(df["int_rate"].str.rstrip("%"), errors="coerce")
 
     df["issue_d"] = pd.to_datetime(df["issue_d"], format="%b-%Y", errors="coerce")
 
@@ -84,7 +84,9 @@ def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
 
     df["pub_rec"] = pd.to_numeric(df["pub_rec"], errors="coerce")  # Ensures numeric
 
-    df["revol_util"] = df["revol_util"].clip(upper=100)  # set values more than 100 to NaN
+    df["revol_util"] = df["revol_util"].clip(
+        upper=100
+    )  # set values more than 100 to NaN
 
     df["initial_list_status"] = df["initial_list_status"].apply(
         lambda x: x.lower().strip() if isinstance(x, str) else x
@@ -113,7 +115,9 @@ def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
     # # Clean and standardize verification_status fields
     for col in ["verification_status", "verification_status_joint"]:
         if col in df.columns:
-            df[col] = df[col].apply(lambda x: x.strip().lower() if isinstance(x, str) else x)
+            df[col] = df[col].apply(
+                lambda x: x.strip().lower() if isinstance(x, str) else x
+            )
 
     for col in ["revol_bal", "revol_bal_joint"]:
         if col in df.columns:
@@ -123,16 +127,16 @@ def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
         lambda x: (
             "other"
             if isinstance(x, str) and x.strip().lower() in {"none", "any", "unknown"}
-            else x.strip().lower()
-            if isinstance(x, str)
-            else x
+            else x.strip().lower() if isinstance(x, str) else x
         )
     )
 
     return df
 
 
-def clean_remaining_object_columns(df: pd.DataFrame, exclude: list = None) -> pd.DataFrame:
+def clean_remaining_object_columns(
+    df: pd.DataFrame, exclude: list = None
+) -> pd.DataFrame:
     """
     Convert all object-type columns to clean lowercase strings,
     excluding columns listed in `exclude`. NaNs are preserved.
@@ -148,8 +152,7 @@ def clean_remaining_object_columns(df: pd.DataFrame, exclude: list = None) -> pd
         exclude = []
 
     text_cols_to_clean = [
-        col for col in df.select_dtypes(include="object").columns
-        if col not in exclude
+        col for col in df.select_dtypes(include="object").columns if col not in exclude
     ]
 
     for col in text_cols_to_clean:
@@ -174,7 +177,9 @@ def encode_joint_application_flag(df):
     """
     if "application_type" in df.columns:
         df["is_joint_app"] = df["application_type"].apply(
-            lambda x: 1 if isinstance(x, str) and x.strip().lower() == "joint app" else 0
+            lambda x: (
+                1 if isinstance(x, str) and x.strip().lower() == "joint app" else 0
+            )
         )
 
     elif "is_joint_app" in df.columns:
@@ -207,11 +212,9 @@ def filter_and_encode_loan_status(df: pd.DataFrame) -> pd.DataFrame:
     """
     valid_statuses = ["fully paid", "charged off", "default"]
     df["loan_status"] = df["loan_status"].str.strip().str.lower()
-    df["loan_status_binary"] = df["loan_status"].map({
-        "fully Paid": 0,
-        "charged Off": 1,
-        "default": 1
-    })
+    df["loan_status_binary"] = df["loan_status"].map(
+        {"fully Paid": 0, "charged Off": 1, "default": 1}
+    )
     return df
 
 
@@ -222,7 +225,7 @@ def remove_invalid_rows(df: pd.DataFrame) -> pd.DataFrame:
     df = df[(df["dti"] >= 0) & (df["dti"] <= 100)]
     df = df[
         (df["dti_joint"].isna()) | ((df["dti_joint"] >= 0) & (df["dti_joint"] <= 100))
-        ]
+    ]
     return df
 
 

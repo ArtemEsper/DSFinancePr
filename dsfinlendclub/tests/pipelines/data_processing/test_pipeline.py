@@ -1,6 +1,5 @@
 import pandas as pd
 from kedro.io import DataCatalog, MemoryDataset
-from kedro.io import DataCatalog, MemoryDataset
 from kedro.runner import SequentialRunner
 from dsfinlendclub.pipelines.data_processing.pipeline import create_pipeline
 from ydata_profiling import ProfileReport

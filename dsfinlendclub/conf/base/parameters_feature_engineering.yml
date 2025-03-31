@@ -1,0 +1,33 @@
+# This is a boilerplate parameters config generated for pipeline 'feature_engineering'
+# using Kedro 0.19.8.
+#
+# Documentation for this file format can be found in "Parameters"
+# Link: https://docs.kedro.org/en/0.19.8/configuration/parameters.html
+
+
+redundant_columns_to_drop:
+  - dti
+  - dti_joint
+  - revol_util
+
+id_column: "id"
+exclude_from_cleaning:
+  - "loan_status"
+  - "grade"
+  - "sub_grade"
+
+pub_rec_strategy: "median"
+columns_to_drop:
+  - "hardship_flag"
+  - "hardship_loan_status"
+  - "hardship_dpd"
+  - "emp_length"
+  - "grade"
+  - "sub_grade"
+  - "verification_status"
+  - "verification_status_joint"
+  - "revol_bal"
+  - "revol_bal_joint"
+  - "mths_since_last_record"
+  - "initial_list_status"
+  - "purpose"

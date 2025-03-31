@@ -25,9 +25,33 @@ intermediate_mock_data:
   filepath: data/02_intermediate/preprocessed_mock_data.csv
 
 intermediate_sample_data:
-  type: pandas.ParquetDataSet
+  type: pandas.ParquetDataset
   filepath: data/02_intermediate/preprocessed_sample_data.pq
 
 intermediate_data:
-  type: pandas.ParquetDataSet
+  type: pandas.ParquetDataset
   filepath: data/02_intermediate/preprocessed_lc_data.pq
+
+engineered_features:
+  type: pandas.ParquetDataset
+  filepath: data/03_primary/engineered_features.pq
+
+feature_evaluation_metrics:
+  type: json.JSONDataset
+  filepath: data/08_reporting/feature_evaluation_metrics.json
+
+tree_features:
+  type: pandas.ParquetDataset
+  filepath: data/04_feature/tree_features.pq
+
+regression_features:
+  type: pandas.ParquetDataset
+  filepath: data/04_feature/regression_features.pq
+
+tree_features_evaluation:
+  type: json.JSONDataset
+  filepath: data/08_reporting/tree_features_evaluation.json
+
+regression_features_evaluation:
+  type: json.JSONDataset
+  filepath: data/08_reporting/regression_features_evaluation.json
