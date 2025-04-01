@@ -4,20 +4,9 @@
 # Documentation for this file format can be found in "Parameters"
 # Link: https://docs.kedro.org/en/0.19.8/configuration/parameters.html
 
-
-redundant_columns_to_drop:
-  - dti
-  - dti_joint
-  - revol_util
-
-id_column: "id"
-exclude_from_cleaning:
-  - "loan_status"
-  - "grade"
-  - "sub_grade"
-
 pub_rec_strategy: "median"
 columns_to_drop:
+  - "home_ownership"
   - "hardship_flag"
   - "hardship_loan_status"
   - "hardship_dpd"

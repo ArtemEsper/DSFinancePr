@@ -9,17 +9,23 @@ from sklearn.impute import SimpleImputer
 from typing import Tuple
 
 
+# debug function
+def print_columns(df, stage_name):
+    """Debug function to print column names at each stage."""
+    print(f"Columns at {stage_name}: {list(df.columns)}")
+    return df
+
+
 def drop_unwanted_columns(x: pd.DataFrame, drop_list=None) -> pd.DataFrame:
     """
-    Drops unwanted columns from the DataFrame.
+    Drops unwanted columns from the DataFrame and returns a copy for forked downstream use.
 
     Parameters:
-        :param drop_list: List of column names to drop. Defaults to ['Unnamed: 0.1', 'Unnamed: 0'].
-        :param x: df (pd.DataFrame): The input DataFrame.
+        x: Input DataFrame.
+        drop_list: List of columns to drop.
 
     Returns:
-        pd.DataFrame: A new DataFrame with specified columns dropped.
-
+        Tuple of two identical DataFrames (post-drop), for forked pipeline paths.
     """
     print("Dropping columns:", drop_list)
     if drop_list is None:
@@ -220,7 +226,7 @@ def create_income_model_features(df: pd.DataFrame) -> pd.DataFrame:
 
         # High income flag for trees
         df["is_high_income_tree"] = (
-            df["annual_inc_final"] > df["annual_inc_final"].median()
+                df["annual_inc_final"] > df["annual_inc_final"].median()
         ).astype(int)
 
         # Regression features
@@ -475,41 +481,50 @@ def create_initial_list_status_flag(df):
     return df
 
 
-def create_credit_age_feature(df):
+def create_credit_age_feature(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Creates a unified feature 'earliest_cr_line_final' combining individual and joint applicants' credit line information,
-    and calculates credit age in months.
+    Creates a unified feature 'earliest_cr_line_final' combining individual and joint applicants'
+    credit line information, and calculates credit age in months.
 
     Parameters:
-        df (pd.DataFrame): DataFrame with 'earliest_cr_line', 'sec_app_earliest_cr_line', 'issue_d', and 'is_joint_app'.
+        df (pd.DataFrame): DataFrame with 'earliest_cr_line', 'sec_app_earliest_cr_line',
+                           'issue_d', and 'is_joint_app'.
 
     Returns:
         pd.DataFrame: Updated DataFrame with 'earliest_cr_line_final' and 'credit_age_months'.
     """
-    df["earliest_cr_line_final"] = df["earliest_cr_line"]
-    if "is_joint_app" in df.columns and "sec_app_earliest_cr_line" in df.columns:
-        joint_mask = df["is_joint_app"] == 1
-        df.loc[joint_mask, "earliest_cr_line_final"] = df.loc[
-            joint_mask, "sec_app_earliest_cr_line"
-        ]
+    # Ensure date columns are properly parsed as datetime
+    if "earliest_cr_line" in df.columns and not pd.api.types.is_datetime64_dtype(df["earliest_cr_line"]):
+        df["earliest_cr_line"] = pd.to_datetime(df["earliest_cr_line"], errors="coerce")
 
-    # Drop original columns
-    # df.drop(
-    #     columns=[
-    #         col
-    #         for col in ["earliest_cr_line", "sec_app_earliest_cr_line"]
-    #         if col in df.columns
-    #     ],
-    #     inplace=True,
-    # )
+    if "sec_app_earliest_cr_line" in df.columns and not pd.api.types.is_datetime64_dtype(
+            df["sec_app_earliest_cr_line"]):
+        df["sec_app_earliest_cr_line"] = pd.to_datetime(df["sec_app_earliest_cr_line"], errors="coerce")
+
+    if "issue_d" in df.columns and not pd.api.types.is_datetime64_dtype(df["issue_d"]):
+        df["issue_d"] = pd.to_datetime(df["issue_d"], errors="coerce")
+
+    # Default to primary applicant's earliest credit line
+    df["earliest_cr_line_final"] = df["earliest_cr_line"]
+
+    # Use secondary applicant's date if it's a joint application
+    if "is_joint_app" in df.columns and "sec_app_earliest_cr_line" in df.columns:
+        joint_mask = (df["is_joint_app"] == 1) & df["sec_app_earliest_cr_line"].notna()
+        df.loc[joint_mask, "earliest_cr_line_final"] = df.loc[joint_mask, "sec_app_earliest_cr_line"]
 
     # Calculate credit age in months
     if "issue_d" in df.columns and "earliest_cr_line_final" in df.columns:
-        # Using pd.Timedelta for more robust datetime calculations
-        df["credit_age_months"] = (
-            df["issue_d"] - df["earliest_cr_line_final"]
-        ).dt.total_seconds() / (30 * 24 * 60 * 60)
-        df["credit_age_months"] = df["credit_age_months"].clip(lower=0)
+        valid_dates_mask = df["issue_d"].notna() & df["earliest_cr_line_final"].notna()
+        df["credit_age_months"] = np.nan
+
+        if valid_dates_mask.any():
+            df.loc[valid_dates_mask, "credit_age_months"] = (
+                    (df.loc[valid_dates_mask, "issue_d"] - df.loc[valid_dates_mask, "earliest_cr_line_final"])
+                    .dt.total_seconds() / (30 * 24 * 60 * 60)
+            )
+
+            # Clip to avoid negative durations
+            df["credit_age_months"] = df["credit_age_months"].clip(lower=0)
 
     return df
 
@@ -544,8 +559,9 @@ def handle_pub_rec_missing(df: pd.DataFrame, strategy: str = "median") -> pd.Dat
 
 def encode_purpose_field(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Modified to work with preprocessed 'purpose' field that's already
+    Working with preprocessed 'purpose' field that's already
     lowercase and space-normalized.
+    Adds one-hot encoding of 'purpose_cleaned' field
     """
     if "purpose" not in df.columns:
         return df
@@ -559,7 +575,8 @@ def encode_purpose_field(df: pd.DataFrame) -> pd.DataFrame:
         lambda x: "other" if x in rare_purposes else x
     )
 
-    return pd.get_dummies(df["purpose_cleaned"], prefix="purpose", dummy_na=True)
+    dummies = pd.get_dummies(df["purpose_cleaned"], prefix="purpose", dummy_na=True)
+    return pd.concat([df, dummies], axis=1)
 
 
 def create_fico_score_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -602,12 +619,12 @@ def create_fico_model_features(df: pd.DataFrame) -> pd.DataFrame:
 
         # Create binary high/low FICO indicators
         df["is_high_fico_tree"] = (
-            df["fico_average"] > df["fico_average"].median()
+                df["fico_average"] > df["fico_average"].median()
         ).astype(int)
 
         # Regression features - normalized scores
         df["fico_normalized_reg"] = (df["fico_average"] - df["fico_average"].min()) / (
-            df["fico_average"].max() - df["fico_average"].min()
+                df["fico_average"].max() - df["fico_average"].min()
         )
 
     return df
@@ -653,7 +670,7 @@ def create_credit_history_features(df: pd.DataFrame) -> pd.DataFrame:
         # Weight recent delinquencies more heavily
         if "mths_since_last_delinq" in df.columns:
             df["delinq_weight"] = df["delinq_2yrs"] * (
-                1 + 1 / df["mths_since_last_delinq"].clip(lower=1)
+                    1 + 1 / df["mths_since_last_delinq"].clip(lower=1)
             )
 
     return df
@@ -670,7 +687,7 @@ def create_credit_history_model_features(df: pd.DataFrame) -> pd.DataFrame:
         # Create binary flags for tree models
         df["has_delinq_tree"] = (df["delinq_2yrs"] > 0).astype(int)
         df["has_recent_delinq_tree"] = (
-            df["mths_since_last_delinq"].fillna(999) < 24
+                df["mths_since_last_delinq"].fillna(999) < 24
         ).astype(int)
 
     # Regression model features
@@ -736,11 +753,13 @@ def evaluate_feature_engineering(df: pd.DataFrame) -> dict:
     return metrics
 
 
-def create_model_specific_datasets(
-    df: pd.DataFrame,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def create_model_specific_datasets(df: pd.DataFrame,) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Creates separate datasets optimized for tree-based and regression models.
+
+    This function identifies and properly handles model-specific features
+    (those ending with _tree or _reg) and ensures critical features like
+    home_ownership_ordinal are preserved in both output datasets.
 
     Args:
         df: DataFrame with all engineered features
@@ -748,31 +767,440 @@ def create_model_specific_datasets(
     Returns:
         tuple: (tree_features_df, regression_features_df)
     """
+    # Print input columns for debugging
+    print(f"Input columns to create_model_specific_datasets: {df.columns.tolist()}")
+
+    # Create copies for tree and regression datasets
     tree_features = df.copy()
     regression_features = df.copy()
 
-    # Map features to their model-specific versions
-    feature_mapping = {
+    # Identify all model-specific columns
+    tree_specific_cols = [col for col in df.columns if col.endswith('_tree')]
+    reg_specific_cols = [col for col in df.columns if col.endswith('_reg')]
+
+    # Define the base features that should be retained in both datasets
+    # This is a more comprehensive approach than using a static mapping
+    essential_columns = [
+        # Target variable
+        "loan_status_binary",
+
+        # Categorical encodings
+        "home_ownership_ordinal",
+        "purpose_high_risk",
+
+        # Important loan characteristics
+        "loan_amnt",
+        "term",
+        "int_rate",
+        "grade_encoded",
+        "sub_grade_encoded",
+
+        # Credit score features
+        "fico_average",
+        "fico_risk_band",
+
+        # Income features
+        "annual_inc_final",
+
+        # DTI features
+        "dti_final",
+
+        # Credit history features
+        "credit_age_months",
+        "has_derogatory",
+        "delinquency_score",
+
+        # Loan characteristic features
+        "loan_to_installment_ratio",
+
+        # Credit utilization
+        "revol_util",
+
+        # Joint application features
+        "is_joint_app",
+        "verification_status_final",
+
+        # Hardship features
+        "has_hardship",
+        "was_late_before_hardship",
+    ]
+
+    # Map base features to their model-specific versions
+    model_specific_mappings = {
+        # Tree models - generally use missing value indicators
         "tree": {
             "emp_length_clean": "emp_length_clean_tree",
             "revol_util": "revol_util_tree",
+            "delinq_2yrs": "delinq_2yrs_tree",
+            # Add other mappings as needed
         },
+        # Regression models - generally use imputed values
         "regression": {
             "emp_length_clean": "emp_length_clean_reg",
             "revol_util": "revol_util_reg",
+            "delinq_2yrs": "delinq_2yrs_reg",
+            # Add other mappings as needed
         },
     }
 
-    # Update tree dataset
-    for orig, tree_col in feature_mapping["tree"].items():
+    # Process tree features dataset
+    # 1. Map model-specific features to their base names
+    for base_col, tree_col in model_specific_mappings["tree"].items():
         if tree_col in df.columns:
-            tree_features[orig] = tree_features[tree_col]
-            tree_features = tree_features.drop(columns=[tree_col])
+            tree_features[base_col] = tree_features[tree_col]
 
-    # Update regression dataset
-    for orig, reg_col in feature_mapping["regression"].items():
+    # 2. Keep only tree-specific features and essential columns
+    tree_cols_to_keep = (
+            [col for col in tree_features.columns if not col.endswith('_reg')] +
+            essential_columns
+    )
+    tree_cols_to_keep = list(set(tree_cols_to_keep))  # Remove duplicates
+    tree_features = tree_features[
+        [col for col in tree_cols_to_keep if col in tree_features.columns]
+    ]
+
+    # Process regression features dataset
+    # 1. Map model-specific features to their base names
+    for base_col, reg_col in model_specific_mappings["regression"].items():
         if reg_col in df.columns:
-            regression_features[orig] = regression_features[reg_col]
-            regression_features = regression_features.drop(columns=[reg_col])
+            regression_features[base_col] = regression_features[reg_col]
+
+    # 2. Keep only regression-specific features and essential columns
+    reg_cols_to_keep = (
+            [col for col in regression_features.columns if not col.endswith('_tree')] +
+            essential_columns
+    )
+    reg_cols_to_keep = list(set(reg_cols_to_keep))  # Remove duplicates
+    regression_features = regression_features[
+        [col for col in reg_cols_to_keep if col in regression_features.columns]
+    ]
+
+    # Print output dataset columns for debugging
+    print(f"Tree features columns: {tree_features.columns.tolist()}")
+    print(f"Regression features columns: {regression_features.columns.tolist()}")
+
+    # Verify home_ownership_ordinal is present in both datasets
+    for dataset_name, dataset in [("Tree", tree_features), ("Regression", regression_features)]:
+        if "home_ownership_ordinal" in dataset.columns:
+            print(f"✅ home_ownership_ordinal is present in {dataset_name} dataset")
+        else:
+            print(f"❌ home_ownership_ordinal is missing from {dataset_name} dataset")
 
     return tree_features, regression_features
+
+
+def create_home_ownership_ordinal(df: pd.DataFrame) -> pd.DataFrame:
+    """
+        Create an ordinal encoding for home ownership status that reflects
+    risk level.
+
+        Parameters:
+            df (pd.DataFrame): Input DataFrame with 'home_ownership' column
+
+        Returns:
+            pd.DataFrame: DataFrame with new 'home_ownership_ordinal' feature
+    """
+    # Risk order: 'other' (highest risk) > 'rent' > 'mortgage' > 'own' (lowest risk)
+    ownership_risk_map = {"other": 3, "rent": 2, "mortgage": 1, "own": 0}
+
+    if "home_ownership" in df.columns:
+        df["home_ownership_ordinal"] = df["home_ownership"].map(ownership_risk_map)
+        # Fill any missing values with highest risk level
+        df["home_ownership_ordinal"] = df["home_ownership_ordinal"].fillna(3)
+
+    return df
+
+
+def create_time_based_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Create time-based features from date columns.
+
+    Parameters:
+        df (pd.DataFrame): Input DataFrame with date columns
+
+    Returns:
+        pd.DataFrame: DataFrame with new time-based features
+    """
+    # Loan age at time of default/repayment
+    if "issue_d" in df.columns and "last_pymnt_d" in df.columns:
+        # Ensure both columns are datetime
+        if not pd.api.types.is_datetime64_dtype(df["issue_d"]):
+            df["issue_d"] = pd.to_datetime(df["issue_d"], errors="coerce")
+
+        if not pd.api.types.is_datetime64_dtype(df["last_pymnt_d"]):
+            df["last_pymnt_d"] = pd.to_datetime(df["last_pymnt_d"], errors="coerce")
+
+        valid_dates = df["issue_d"].notna() & df["last_pymnt_d"].notna()
+        df["loan_age_months"] = np.nan
+
+        if valid_dates.any():
+            df.loc[valid_dates, "loan_age_months"] = (
+                    (df.loc[valid_dates, "last_pymnt_d"] - df.loc[valid_dates, "issue_d"])
+                    .dt.days / 30
+            ).clip(lower=0)
+
+            # Binned version for tree models
+            loan_age_bins = [0, 6, 12, 24, 36, 48, 60, float("inf")]
+            loan_age_labels = [0, 1, 2, 3, 4, 5, 6]
+
+            df["loan_age_bins"] = pd.cut(
+                df["loan_age_months"],
+                bins=loan_age_bins,
+                labels=loan_age_labels,
+                include_lowest=True,
+            )
+
+    # Seasonality features
+    if "issue_d" in df.columns:
+        if not pd.api.types.is_datetime64_dtype(df["issue_d"]):
+            df["issue_d"] = pd.to_datetime(df["issue_d"], errors="coerce")
+
+        valid_issue_dates = df["issue_d"].notna()
+        df["issue_month"] = np.nan
+        df["issue_quarter"] = np.nan
+        df["issue_year"] = np.nan
+
+        if valid_issue_dates.any():
+            df.loc[valid_issue_dates, "issue_month"] = df.loc[valid_issue_dates, "issue_d"].dt.month
+            df.loc[valid_issue_dates, "issue_quarter"] = df.loc[valid_issue_dates, "issue_d"].dt.quarter
+            df.loc[valid_issue_dates, "issue_year"] = df.loc[valid_issue_dates, "issue_d"].dt.year
+
+            # Economic cycle proxy (very simple)
+            recession_years = [2008, 2009, 2020]
+            df["recession_period"] = df["issue_year"].isin(recession_years).astype(int)
+
+    return df
+
+
+def create_payment_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Create payment-related features from loan details.
+
+    Parameters:
+        df (pd.DataFrame): Input DataFrame with loan payment info
+
+    Returns:
+        pd.DataFrame: DataFrame with new payment-related features
+    """
+    # Income to payment ratio (affordability metric)
+    if "annual_inc_final" in df.columns and "installment" in df.columns:
+        df["payment_to_income"] = (
+                (df["installment"] * 12) / df["annual_inc_final"] * 100
+        )
+        df["payment_to_income"] = df["payment_to_income"].clip(upper=100)
+
+        # Flag high payment burden
+        df["high_payment_burden"] = (df["payment_to_income"] > 20).astype(int)
+
+    # Interest payment burden
+    if (
+            "installment" in df.columns
+            and "loan_amnt" in df.columns
+            and "term" in df.columns
+    ):
+        # Total payments over loan life
+        df["total_payments"] = df["installment"] * df["term"]
+        # Total interest as percentage of loan amount
+        df["interest_burden_pct"] = (
+                                            (df["total_payments"] - df["loan_amnt"]) / df["loan_amnt"]
+                                    ) * 100
+
+    return df
+
+
+def create_credit_inquiry_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+        Create features related to credit inquiries and credit seeking
+    behavior.
+
+        Parameters:
+            df (pd.DataFrame): Input DataFrame with inquiry information
+
+        Returns:
+            pd.DataFrame: DataFrame with new inquiry-related features
+    """
+    # Recent inquiry intensity
+    if "inq_last_6mths" in df.columns and "inq_last_12m" in df.columns:
+        # Calculate 6-month vs 12-month inquiry ratio
+        df["recent_inquiry_intensity"] = df["inq_last_6mths"] / df["inq_last_12m"].clip(
+            lower=1
+        )
+        df["recent_inquiry_intensity"] = df["recent_inquiry_intensity"].clip(upper=1)
+
+        # Create a high recent inquiry flag
+        df["high_recent_inquiries"] = (df["inq_last_6mths"] >= 3).astype(int)
+
+    # Inquiries to accounts ratio (credit seeking success rate)
+    if "inq_last_12m" in df.columns and "open_acc_6m" in df.columns:
+        df["inq_to_open_acc_ratio"] = df["inq_last_12m"] / df["open_acc_6m"].clip(
+            lower=1
+        )
+        df["inq_to_open_acc_ratio"] = df["inq_to_open_acc_ratio"].clip(upper=10)
+
+    return df
+
+
+def create_delinquency_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Create features that capture delinquency history and patterns.
+
+    Parameters:
+        df (pd.DataFrame): Input DataFrame with delinquency information.
+
+    Returns:
+        pd.DataFrame: DataFrame with new delinquency features.
+    """
+    delinq_columns = [
+        "delinq_2yrs",
+        "mths_since_last_delinq",
+        "mths_since_recent_revol_delinq",
+        "acc_now_delinq",
+    ]
+
+    # Initialize delinquency score
+    df["delinquency_score"] = 0
+
+    # Add points for delinquencies in the last 2 years
+    if "delinq_2yrs" in df.columns:
+        df["delinquency_score"] += df["delinq_2yrs"].clip(upper=5)
+
+    # Subtract points for time since last delinquency (longer is better)
+    if "mths_since_last_delinq" in df.columns:
+        df["recent_delinq_bin"] = pd.cut(
+            df["mths_since_last_delinq"].fillna(999),
+            bins=[0, 6, 12, 24, float("inf")],
+            labels=[3, 2, 1, 0],
+            include_lowest=True,
+        )
+        df["delinquency_score"] += df["recent_delinq_bin"].astype(float)
+
+    # Add extra weight for current delinquencies
+    if "acc_now_delinq" in df.columns:
+        df["delinquency_score"] += df["acc_now_delinq"].clip(upper=3) * 2
+
+    # Cap the score at 10
+    df["delinquency_score"] = df["delinquency_score"].clip(upper=10)
+
+    return df
+
+
+def create_debt_composition_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Create features that characterize the composition of the applicant's debt profile.
+
+    Parameters:
+        df (pd.DataFrame): Input DataFrame with account information.
+
+    Returns:
+        pd.DataFrame: DataFrame with new debt composition features.
+    """
+    # Installment to revolving debt ratio
+    if "total_bal_il" in df.columns and "revol_bal_final" in df.columns:
+        df["inst_to_revol_ratio"] = df["total_bal_il"] / df["revol_bal_final"].clip(
+            lower=1
+        )
+        df["inst_to_revol_ratio"] = df["inst_to_revol_ratio"].clip(upper=10)
+
+        df["debt_composition_type"] = pd.cut(
+            df["inst_to_revol_ratio"],
+            bins=[0, 0.5, 2, 5, float("inf")],
+            labels=[
+                "revolving_heavy",
+                "balanced",
+                "installment_heavy",
+                "installment_only",
+            ],
+            include_lowest=True,
+        )
+
+    # Mortgage burden features
+    if "mort_acc" in df.columns and "total_acc" in df.columns:
+        df["mortgage_ratio"] = df["mort_acc"] / df["total_acc"].clip(lower=1)
+        df["has_mortgage"] = (df["mort_acc"] > 0).astype(int)
+
+    return df
+
+
+def create_account_activity_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Create features that measure recent credit account activity and patterns.
+
+    Parameters:
+        df (pd.DataFrame): Input DataFrame with account activity information.
+
+    Returns:
+        pd.DataFrame: DataFrame with new account activity features.
+    """
+
+    # Calculate ratio of recently opened accounts
+    if "open_acc" in df.columns and "acc_open_past_24mths" in df.columns:
+        df["recent_acc_ratio"] = df["acc_open_past_24mths"] / df["open_acc"].clip(
+            lower=1
+        )
+        df["recent_acc_ratio"] = df["recent_acc_ratio"].clip(upper=1)
+
+        # Flag borrowers with rapid account acquisition
+        df["rapid_acc_acquisition"] = (df["recent_acc_ratio"] > 0.5).astype(int)
+
+    # Calculate active account ratio
+    if "open_acc" in df.columns and "total_acc" in df.columns:
+        df["active_acc_ratio"] = df["open_acc"] / df["total_acc"].clip(lower=1)
+        df["active_acc_ratio"] = df["active_acc_ratio"].clip(upper=1)
+
+    return df
+
+
+def create_loan_purpose_risk_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+        Create risk-based features for different loan purposes based on
+    historical default rates.
+
+        Parameters:
+            df (pd.DataFrame): Input DataFrame with loan purpose information
+
+        Returns:
+            pd.DataFrame: DataFrame with purpose risk features (one-hot encoded)
+    """
+    # Risk mapping based on industry knowledge
+    purpose_risk_map = {
+        "debt_consolidation": 2,
+        "credit_card": 2,
+        "home_improvement": 1,
+        "major_purchase": 2,
+        "medical": 3,
+        "car": 1,
+        "small_business": 4,
+        "moving": 3,
+        "vacation": 4,
+        "house": 1,
+        "wedding": 3,
+        "renewable_energy": 2,
+        "educational": 3,
+        "other": 3,
+    }
+
+    if "purpose" in df.columns:
+        # Create risk score
+        df["purpose_risk_score"] = df["purpose"].map(purpose_risk_map)
+        df["purpose_risk_score"] = df["purpose_risk_score"].fillna(3)
+
+        # Risk categories
+        risk_category_map = {1: "low", 2: "medium", 3: "high", 4: "very_high"}
+        df["purpose_risk_category"] = df["purpose_risk_score"].map(risk_category_map)
+
+        # Create one-hot encoding for tree models
+        df["purpose_high_risk"] = (df["purpose_risk_score"] >= 3).astype(int)
+
+    return df
+
+
+def create_combined_hardship_risk(df):
+    """
+    Optional: Combine hardship indicators into a single binary flag.
+    """
+    df["hardship_risk_flag"] = (
+        (df["has_hardship"] == 1)
+        & (df["was_late_before_hardship"] == 1)
+        & (df["hardship_dpd_filled"] > 30)
+    ).astype(int)
+    return df
