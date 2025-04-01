@@ -40,6 +40,7 @@ from .nodes import (
     create_account_activity_features,
     create_loan_purpose_risk_features,
     print_columns,
+    create_major_derog_features,
 )
 
 
@@ -220,10 +221,16 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="data_with_account_activity",
                 name="create_account_activity",
             ),
+            node(
+                func=create_major_derog_features,
+                inputs="data_with_account_activity",
+                outputs="data_with_major_derog_features",
+                name="create_major_derog_features",
+            ),
             # Group 11: Model-specific feature creation
             node(
                 func=create_credit_history_model_features,
-                inputs="data_with_account_activity",
+                inputs="data_with_major_derog_features",
                 outputs="data_with_credit_model_features",
                 name="create_credit_model_features",
             ),

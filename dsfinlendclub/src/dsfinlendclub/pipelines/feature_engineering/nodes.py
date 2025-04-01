@@ -753,7 +753,7 @@ def evaluate_feature_engineering(df: pd.DataFrame) -> dict:
     return metrics
 
 
-def create_model_specific_datasets(df: pd.DataFrame,) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def create_model_specific_datasets(df: pd.DataFrame, ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Creates separate datasets optimized for tree-based and regression models.
 
@@ -1199,8 +1199,27 @@ def create_combined_hardship_risk(df):
     Optional: Combine hardship indicators into a single binary flag.
     """
     df["hardship_risk_flag"] = (
-        (df["has_hardship"] == 1)
-        & (df["was_late_before_hardship"] == 1)
-        & (df["hardship_dpd_filled"] > 30)
+            (df["has_hardship"] == 1)
+            & (df["was_late_before_hardship"] == 1)
+            & (df["hardship_dpd_filled"] > 30)
     ).astype(int)
+    return df
+
+
+def create_major_derog_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Create features from 'mths_since_last_major_derog'.
+
+    Parameters:
+        df (pd.DataFrame): Input DataFrame with the field.
+
+    Returns:
+        pd.DataFrame: DataFrame with engineered features.
+    """
+    if "mths_since_last_major_derog" in df.columns:
+        # Fill NaN = no major derogatory
+        df["mths_since_last_major_derog_filled"] = df["mths_since_last_major_derog"].fillna(999)
+        df["recent_major_derog_flag"] = (df["mths_since_last_major_derog_filled"] < 24).astype(int)
+        df["major_derog_score"] = 1 / (df["mths_since_last_major_derog_filled"].clip(lower=1))
+
     return df
