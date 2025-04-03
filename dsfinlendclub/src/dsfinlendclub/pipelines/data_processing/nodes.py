@@ -4,6 +4,7 @@ generated using Kedro 0.19.8
 """
 
 import pandas as pd
+import numpy as np
 
 
 def check_and_remove_duplicates(df, key="id"):
@@ -101,6 +102,18 @@ def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
         upper=999
     )
 
+    df["tot_cur_bal"] = pd.to_numeric(df["tot_cur_bal"], errors="coerce")  # Convert to numeric
+    df["tot_cur_bal"] = df["tot_cur_bal"].clip(lower=0)
+
+    df["open_act_il"] = pd.to_numeric(df["open_act_il"], errors="coerce")  # Convert to numeric
+    df["open_act_il"] = df["open_act_il"].clip(lower=0)
+
+    df["avg_cur_bal"] = pd.to_numeric(df["avg_cur_bal"], errors="coerce")  # Convert to numeric
+    df["avg_cur_bal"] = df["avg_cur_bal"].clip(lower=0)
+
+    df["mths_since_recent_inq"] = pd.to_numeric(df["mths_since_recent_inq"], errors="coerce")  # Convert to numeric
+    df.loc[df["mths_since_recent_inq"] < 0, "mths_since_recent_inq"] = np.nan  # Remove invalid negatives
+
     # Ensure annual_inc_joint is numeric (may contain nulls)
     df["annual_inc_joint"] = pd.to_numeric(df["annual_inc_joint"], errors="coerce")
 
@@ -135,7 +148,7 @@ def fix_column_types(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def clean_remaining_object_columns(
-    df: pd.DataFrame, exclude: list = None
+        df: pd.DataFrame, exclude: list = None
 ) -> pd.DataFrame:
     """
     Convert all object-type columns to clean lowercase strings,
@@ -225,7 +238,7 @@ def remove_invalid_rows(df: pd.DataFrame) -> pd.DataFrame:
     df = df[(df["dti"] >= 0) & (df["dti"] <= 100)]
     df = df[
         (df["dti_joint"].isna()) | ((df["dti_joint"] >= 0) & (df["dti_joint"] <= 100))
-    ]
+        ]
     return df
 
 

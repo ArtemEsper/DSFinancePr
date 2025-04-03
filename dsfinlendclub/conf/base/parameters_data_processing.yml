@@ -99,3 +99,4 @@ admin_columns_to_drop:
   - total_bal_ex_mort
   - total_bc_limit
   - total_il_high_credit_limit
+  - application_type

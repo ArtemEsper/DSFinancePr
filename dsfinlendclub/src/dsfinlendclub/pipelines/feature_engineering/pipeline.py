@@ -32,7 +32,6 @@ from .nodes import (
     create_utilization_model_features,
     create_model_specific_datasets,
     create_home_ownership_ordinal,
-    create_time_based_features,
     create_payment_features,
     create_credit_inquiry_features,
     create_delinquency_features,
@@ -41,6 +40,12 @@ from .nodes import (
     create_loan_purpose_risk_features,
     print_columns,
     create_major_derog_features,
+    process_pub_rec_bankruptcies,
+    process_num_tl_op_past_12m,
+    process_mths_since_recent_inq,
+    process_avg_cur_bal,
+    process_open_act_il,
+    process_tot_cur_bal_features,
 )
 
 
@@ -141,14 +146,8 @@ def create_pipeline(**kwargs) -> Pipeline:
                 name="create_credit_age",
             ),
             node(
-                func=create_time_based_features,
-                inputs="data_with_credit_age",
-                outputs="data_with_time_features",
-                name="create_time_features",
-            ),
-            node(
                 func=create_mths_since_last_record_feature,
-                inputs="data_with_time_features",
+                inputs="data_with_credit_age",
                 outputs="data_with_last_record",
                 name="create_last_record",
             ),
@@ -264,10 +263,49 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="data_with_model_features",
                 name="create_utilization_model_features",
             ),
-            # Group 12: Final processing and dataset preparation
+            node(
+                func=process_pub_rec_bankruptcies,
+                inputs="data_with_model_features",
+                outputs="data_with_pub_rec_bankruptcies",
+                name="create_pub_rec_bankruptcies_features",
+            ),
+            node(
+                func=process_num_tl_op_past_12m,
+                inputs="data_with_pub_rec_bankruptcies",
+                outputs="data_with_num_tl_op_past_12m",
+                name="create_num_tl_op_past_12m_features",
+            ),
+            node(
+                func=process_mths_since_recent_inq,
+                inputs="data_with_num_tl_op_past_12m",
+                outputs="data_with_mths_since_recent_inq",
+                name="create_mths_since_recent_inq_features",
+            ),
+            node(
+                func=process_avg_cur_bal,
+                inputs="data_with_mths_since_recent_inq",
+                outputs="data_with_avg_cur_bal",
+                name="create_avg_cur_bal_features",
+            ),
+            node(
+                func=process_open_act_il,
+                inputs="data_with_avg_cur_bal",
+                outputs="data_with_open_act_il",
+                name="create_open_act_il_features",
+            ),
+            node(
+                func=process_tot_cur_bal_features,
+                inputs="data_with_open_act_il",
+                outputs="data_with_tot_cur_bal_features",
+                name="create_tot_cur_bal_features",
+            ),
+            # Group: Final processing and dataset preparation
             node(
                 func=drop_unwanted_columns,
-                inputs=["data_with_model_features", "params:columns_to_drop"],
+                inputs={
+                    "x": "data_with_tot_cur_bal_features",
+                    "drop_list": "params:columns_to_drop",
+                },
                 outputs="engineered_features",
                 name="drop_columns",
             ),
@@ -279,9 +317,13 @@ def create_pipeline(**kwargs) -> Pipeline:
             # ),
             node(
                 func=create_model_specific_datasets,
-                inputs="engineered_features",
+                inputs={
+                    "df": "engineered_features",
+                    "cols_for_tree": "params:cols_for_tree",
+                    "cols_for_reg": "params:cols_for_reg",
+                },
                 outputs=["tree_features", "regression_features"],
-                name="create_model_datasets",
+                name="create_model_specific_datasets_node",
             ),
             node(
                 func=lambda df: print_columns(df, "create_model_datasets"),
@@ -310,11 +352,3 @@ def create_pipeline(**kwargs) -> Pipeline:
             ),
         ]
     )
-
-# # Group 10: Feature evaluation
-# node(
-#     func=evaluate_feature_engineering,
-#     inputs="data_with_account_activity",
-#     outputs="feature_evaluation_metrics",
-#     name="evaluate_features",
-# ),

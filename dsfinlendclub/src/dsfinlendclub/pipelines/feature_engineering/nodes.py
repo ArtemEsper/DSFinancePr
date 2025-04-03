@@ -6,7 +6,7 @@ generated using Kedro 0.19.8
 import pandas as pd
 import numpy as np
 from sklearn.impute import SimpleImputer
-from typing import Tuple
+from typing import Tuple, List
 
 
 # debug function
@@ -16,22 +16,22 @@ def print_columns(df, stage_name):
     return df
 
 
-def drop_unwanted_columns(x: pd.DataFrame, drop_list=None) -> pd.DataFrame:
+def drop_unwanted_columns(x: pd.DataFrame, drop_list: List[str]) -> pd.DataFrame:
     """
-    Drops unwanted columns from the DataFrame and returns a copy for forked downstream use.
+    Drops unwanted columns from the DataFrame.
 
     Parameters:
         x: Input DataFrame.
         drop_list: List of columns to drop.
 
     Returns:
-        Tuple of two identical DataFrames (post-drop), for forked pipeline paths.
+        DataFrame.
     """
     print("Dropping columns:", drop_list)
-    if drop_list is None:
-        drop_list = ["Unnamed: 0.1", "Unnamed: 0"]
 
-    return x.drop(columns=[col for col in drop_list if col in x.columns], axis=1)
+    dropped_df = x.drop(columns=[col for col in drop_list if col in x.columns], axis=1)
+
+    return dropped_df
 
 
 def create_has_hardship_flag(df):
@@ -744,147 +744,55 @@ def evaluate_feature_engineering(df: pd.DataFrame) -> dict:
         for col in cat_cols
     }
 
+    non_numeric_cols = df.select_dtypes(exclude=["number"]).columns
+    print("Non-numeric columns:", list(non_numeric_cols))
+
+    # Target correlation if available
     # Target correlation if available
     if "loan_status_binary" in df.columns:
+        numeric_df = df.select_dtypes(include=["number"])  # Only use numeric columns
         metrics["target_correlations"] = (
-            df.corr()["loan_status_binary"].sort_values(ascending=False).to_dict()
+            numeric_df.corr()["loan_status_binary"]
+            .sort_values(ascending=False)
+            .to_dict()
         )
 
     return metrics
 
 
-def create_model_specific_datasets(df: pd.DataFrame, ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def create_model_specific_datasets(
+    df: pd.DataFrame,
+    cols_for_reg: List[str],
+    cols_for_tree: List[str],
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Creates separate datasets optimized for tree-based and regression models.
+    Creates model-specific datasets for regression and tree-based models based on provided column lists.
 
-    This function identifies and properly handles model-specific features
-    (those ending with _tree or _reg) and ensures critical features like
-    home_ownership_ordinal are preserved in both output datasets.
-
-    Args:
-        df: DataFrame with all engineered features
+    Parameters:
+        df (pd.DataFrame): DataFrame with all engineered features
+        cols_for_reg (list): List of columns to keep for regression-based models
+        cols_for_tree (list): List of columns to keep for tree-based models
 
     Returns:
-        tuple: (tree_features_df, regression_features_df)
+        Tuple[pd.DataFrame, pd.DataFrame]: (tree_features_df, regression_features_df)
     """
-    # Print input columns for debugging
-    print(f"Input columns to create_model_specific_datasets: {df.columns.tolist()}")
 
-    # Create copies for tree and regression datasets
-    tree_features = df.copy()
-    regression_features = df.copy()
+    # Ensure the columns exist in the DataFrame
+    reg_cols_final = [col for col in cols_for_reg if col in df.columns]
+    tree_cols_final = [col for col in cols_for_tree if col in df.columns]
 
-    # Identify all model-specific columns
-    tree_specific_cols = [col for col in df.columns if col.endswith('_tree')]
-    reg_specific_cols = [col for col in df.columns if col.endswith('_reg')]
+    # Always ensure target is included
+    if "loan_status_binary" not in reg_cols_final:
+        reg_cols_final.append("loan_status_binary")
+    if "loan_status_binary" not in tree_cols_final:
+        tree_cols_final.append("loan_status_binary")
 
-    # Define the base features that should be retained in both datasets
-    # This is a more comprehensive approach than using a static mapping
-    essential_columns = [
-        # Target variable
-        "loan_status_binary",
+    # Subset the DataFrame
+    regression_features = df[reg_cols_final].copy()
+    tree_features = df[tree_cols_final].copy()
 
-        # Categorical encodings
-        "home_ownership_ordinal",
-        "purpose_high_risk",
-
-        # Important loan characteristics
-        "loan_amnt",
-        "term",
-        "int_rate",
-        "grade_encoded",
-        "sub_grade_encoded",
-
-        # Credit score features
-        "fico_average",
-        "fico_risk_band",
-
-        # Income features
-        "annual_inc_final",
-
-        # DTI features
-        "dti_final",
-
-        # Credit history features
-        "credit_age_months",
-        "has_derogatory",
-        "delinquency_score",
-
-        # Loan characteristic features
-        "loan_to_installment_ratio",
-
-        # Credit utilization
-        "revol_util",
-
-        # Joint application features
-        "is_joint_app",
-        "verification_status_final",
-
-        # Hardship features
-        "has_hardship",
-        "was_late_before_hardship",
-    ]
-
-    # Map base features to their model-specific versions
-    model_specific_mappings = {
-        # Tree models - generally use missing value indicators
-        "tree": {
-            "emp_length_clean": "emp_length_clean_tree",
-            "revol_util": "revol_util_tree",
-            "delinq_2yrs": "delinq_2yrs_tree",
-            # Add other mappings as needed
-        },
-        # Regression models - generally use imputed values
-        "regression": {
-            "emp_length_clean": "emp_length_clean_reg",
-            "revol_util": "revol_util_reg",
-            "delinq_2yrs": "delinq_2yrs_reg",
-            # Add other mappings as needed
-        },
-    }
-
-    # Process tree features dataset
-    # 1. Map model-specific features to their base names
-    for base_col, tree_col in model_specific_mappings["tree"].items():
-        if tree_col in df.columns:
-            tree_features[base_col] = tree_features[tree_col]
-
-    # 2. Keep only tree-specific features and essential columns
-    tree_cols_to_keep = (
-            [col for col in tree_features.columns if not col.endswith('_reg')] +
-            essential_columns
-    )
-    tree_cols_to_keep = list(set(tree_cols_to_keep))  # Remove duplicates
-    tree_features = tree_features[
-        [col for col in tree_cols_to_keep if col in tree_features.columns]
-    ]
-
-    # Process regression features dataset
-    # 1. Map model-specific features to their base names
-    for base_col, reg_col in model_specific_mappings["regression"].items():
-        if reg_col in df.columns:
-            regression_features[base_col] = regression_features[reg_col]
-
-    # 2. Keep only regression-specific features and essential columns
-    reg_cols_to_keep = (
-            [col for col in regression_features.columns if not col.endswith('_tree')] +
-            essential_columns
-    )
-    reg_cols_to_keep = list(set(reg_cols_to_keep))  # Remove duplicates
-    regression_features = regression_features[
-        [col for col in reg_cols_to_keep if col in regression_features.columns]
-    ]
-
-    # Print output dataset columns for debugging
-    print(f"Tree features columns: {tree_features.columns.tolist()}")
-    print(f"Regression features columns: {regression_features.columns.tolist()}")
-
-    # Verify home_ownership_ordinal is present in both datasets
-    for dataset_name, dataset in [("Tree", tree_features), ("Regression", regression_features)]:
-        if "home_ownership_ordinal" in dataset.columns:
-            print(f"✅ home_ownership_ordinal is present in {dataset_name} dataset")
-        else:
-            print(f"❌ home_ownership_ordinal is missing from {dataset_name} dataset")
+    print(f"✅ Created regression dataset with {len(regression_features.columns)} columns")
+    print(f"✅ Created tree-based dataset with {len(tree_features.columns)} columns")
 
     return tree_features, regression_features
 
@@ -907,67 +815,6 @@ def create_home_ownership_ordinal(df: pd.DataFrame) -> pd.DataFrame:
         df["home_ownership_ordinal"] = df["home_ownership"].map(ownership_risk_map)
         # Fill any missing values with highest risk level
         df["home_ownership_ordinal"] = df["home_ownership_ordinal"].fillna(3)
-
-    return df
-
-
-def create_time_based_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Create time-based features from date columns.
-
-    Parameters:
-        df (pd.DataFrame): Input DataFrame with date columns
-
-    Returns:
-        pd.DataFrame: DataFrame with new time-based features
-    """
-    # Loan age at time of default/repayment
-    if "issue_d" in df.columns and "last_pymnt_d" in df.columns:
-        # Ensure both columns are datetime
-        if not pd.api.types.is_datetime64_dtype(df["issue_d"]):
-            df["issue_d"] = pd.to_datetime(df["issue_d"], errors="coerce")
-
-        if not pd.api.types.is_datetime64_dtype(df["last_pymnt_d"]):
-            df["last_pymnt_d"] = pd.to_datetime(df["last_pymnt_d"], errors="coerce")
-
-        valid_dates = df["issue_d"].notna() & df["last_pymnt_d"].notna()
-        df["loan_age_months"] = np.nan
-
-        if valid_dates.any():
-            df.loc[valid_dates, "loan_age_months"] = (
-                    (df.loc[valid_dates, "last_pymnt_d"] - df.loc[valid_dates, "issue_d"])
-                    .dt.days / 30
-            ).clip(lower=0)
-
-            # Binned version for tree models
-            loan_age_bins = [0, 6, 12, 24, 36, 48, 60, float("inf")]
-            loan_age_labels = [0, 1, 2, 3, 4, 5, 6]
-
-            df["loan_age_bins"] = pd.cut(
-                df["loan_age_months"],
-                bins=loan_age_bins,
-                labels=loan_age_labels,
-                include_lowest=True,
-            )
-
-    # Seasonality features
-    if "issue_d" in df.columns:
-        if not pd.api.types.is_datetime64_dtype(df["issue_d"]):
-            df["issue_d"] = pd.to_datetime(df["issue_d"], errors="coerce")
-
-        valid_issue_dates = df["issue_d"].notna()
-        df["issue_month"] = np.nan
-        df["issue_quarter"] = np.nan
-        df["issue_year"] = np.nan
-
-        if valid_issue_dates.any():
-            df.loc[valid_issue_dates, "issue_month"] = df.loc[valid_issue_dates, "issue_d"].dt.month
-            df.loc[valid_issue_dates, "issue_quarter"] = df.loc[valid_issue_dates, "issue_d"].dt.quarter
-            df.loc[valid_issue_dates, "issue_year"] = df.loc[valid_issue_dates, "issue_d"].dt.year
-
-            # Economic cycle proxy (very simple)
-            recession_years = [2008, 2009, 2020]
-            df["recession_period"] = df["issue_year"].isin(recession_years).astype(int)
 
     return df
 
@@ -1221,5 +1068,188 @@ def create_major_derog_features(df: pd.DataFrame) -> pd.DataFrame:
         df["mths_since_last_major_derog_filled"] = df["mths_since_last_major_derog"].fillna(999)
         df["recent_major_derog_flag"] = (df["mths_since_last_major_derog_filled"] < 24).astype(int)
         df["major_derog_score"] = 1 / (df["mths_since_last_major_derog_filled"].clip(lower=1))
+
+    return df
+
+
+def process_tot_cur_bal_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Process the `tot_cur_bal` field and engineer features for both regression and tree-based models.
+
+    Parameters:
+        df (pd.DataFrame): Input dataframe containing the `tot_cur_bal` column.
+
+    Returns:
+        pd.DataFrame: Updated DataFrame with new engineered features.
+    """
+    if "tot_cur_bal" in df.columns:
+        df["tot_cur_bal"] = pd.to_numeric(df["tot_cur_bal"], errors="coerce")
+        df["tot_cur_bal"] = df["tot_cur_bal"].clip(lower=0)
+
+        # Log transform (for regression models that prefer normalized features)
+        df["log_tot_cur_bal"] = np.log1p(df["tot_cur_bal"])
+
+        # Feature: Balance relative to annual income
+        df["cur_bal_to_income"] = df["tot_cur_bal"] / df["annual_inc"]
+
+        # Feature: Balance relative to loan amount
+        df["cur_bal_to_loan"] = df["tot_cur_bal"] / df["loan_amnt"]
+
+        # Binary indicator for missing values (useful for trees)
+        df["tot_cur_bal_missing"] = df["tot_cur_bal"].isna().astype(int)
+
+        # Handle infinities and fill missing
+        df["cur_bal_to_income"] = df["cur_bal_to_income"].replace([np.inf, -np.inf], np.nan).fillna(0)
+        df["cur_bal_to_loan"] = df["cur_bal_to_loan"].replace([np.inf, -np.inf], np.nan).fillna(0)
+
+    else:
+        print("Warning: 'tot_cur_bal' not found in DataFrame.")
+
+    return df
+
+
+def process_open_act_il(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Preprocesses the 'open_act_il' column:
+    - Ensures numeric type
+    - Replaces invalid negatives with NaN
+    - Adds derived features for regressions and trees
+
+    Returns:
+        pd.DataFrame: Updated dataframe with new features
+    """
+
+    # Tree-friendly missingness indicator
+    df["open_act_il_missing"] = df["open_act_il"].isna().astype(int)
+
+    # Regression feature: log scale for skew reduction
+    df["open_act_il_log"] = np.log1p(df["open_act_il"])
+
+    # Optional: normalize by total number of installment trades (if exists)
+    if "num_il_tl" in df.columns:
+        df["open_act_il_ratio"] = df["open_act_il"] / df["num_il_tl"]
+    else:
+        df["open_act_il_ratio"] = np.nan
+
+    return df
+
+
+def process_avg_cur_bal(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Processes the 'avg_cur_bal' column:
+    - Ensures it's numeric
+    - Handles invalid and missing values
+    - Adds features for both regression and tree-based models
+
+    Parameters:
+        df (pd.DataFrame): Input DataFrame with 'avg_cur_bal' column
+
+    Returns:
+        pd.DataFrame: Transformed DataFrame with new features
+    """
+
+    # Tree-based: missingness flag
+    df["avg_cur_bal_missing"] = df["avg_cur_bal"].isna().astype(int)
+
+    # Regression: log-transformed feature (to reduce skew)
+    df["avg_cur_bal_log"] = np.log1p(df["avg_cur_bal"])
+
+    # Optional ratio: average balance per account
+    if "open_acc" in df.columns:
+        df["avg_bal_per_acc"] = df["avg_cur_bal"] / df["open_acc"]
+    else:
+        df["avg_bal_per_acc"] = np.nan
+
+    return df
+
+
+def process_mths_since_recent_inq(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Processes the 'mths_since_recent_inq' feature:
+    - Converts to numeric
+    - Handles negatives and missing values
+    - Adds modeling features for regression and tree-based models
+
+    Parameters:
+        df (pd.DataFrame): Input DataFrame
+
+    Returns:
+        pd.DataFrame: Transformed DataFrame with new features
+    """
+
+    # Tree-based: Missing flag
+    df["mths_since_recent_inq_missing"] = df["mths_since_recent_inq"].isna().astype(int)
+
+    # Regression: Capped value (e.g. cap at 60 months, treat outliers)
+    df["mths_since_recent_inq_capped"] = df["mths_since_recent_inq"].clip(upper=60)
+
+    # Optional: Binary indicator for "recent" inquiries (within 6 months)
+    df["had_recent_inquiry"] = (df["mths_since_recent_inq"] <= 6).astype(int)
+
+    return df
+
+
+def process_num_tl_op_past_12m(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Processes 'num_tl_op_past_12m' (Number of trade lines opened in the past 12 months).
+
+    Steps:
+    - Converts to numeric
+    - Removes invalid values
+    - Adds a missing value flag (tree models)
+    - Caps values for regression models
+
+    Parameters:
+        df (pd.DataFrame): Input dataframe
+
+    Returns:
+        pd.DataFrame: Updated dataframe with processed features
+    """
+    # Ensure numeric type
+    df["num_tl_op_past_12m"] = pd.to_numeric(df["num_tl_op_past_12m"], errors="coerce")
+
+    # Handle negatives as missing
+    df.loc[df["num_tl_op_past_12m"] < 0, "num_tl_op_past_12m"] = np.nan
+
+    # Tree-based: add missing value flag
+    df["num_tl_op_past_12m_missing"] = df["num_tl_op_past_12m"].isna().astype(int)
+
+    # Regression: capped version (max 10 opens in a year is a practical cap)
+    df["num_tl_op_past_12m_capped"] = df["num_tl_op_past_12m"].clip(upper=10)
+
+    return df
+
+
+def process_pub_rec_bankruptcies(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Processes the 'pub_rec_bankruptcies' field for both regression and tree-based models.
+
+    Steps:
+    - Converts to numeric
+    - Handles invalid values
+    - Adds missing indicator for tree models
+    - Caps values for regression models
+    - Adds binary bankruptcy flag (useful for both)
+
+    Parameters:
+        df (pd.DataFrame): Input dataframe
+
+    Returns:
+        pd.DataFrame: Updated dataframe with engineered features
+    """
+    # Convert to numeric safely
+    df["pub_rec_bankruptcies"] = pd.to_numeric(df["pub_rec_bankruptcies"], errors="coerce")
+
+    # Replace negative values with NaN
+    df.loc[df["pub_rec_bankruptcies"] < 0, "pub_rec_bankruptcies"] = np.nan
+
+    # Missing value flag for tree-based models
+    df["pub_rec_bankruptcies_missing"] = df["pub_rec_bankruptcies"].isna().astype(int)
+
+    # Cap for regression models (0-3 usually covers 99.9%)
+    df["pub_rec_bankruptcies_capped"] = df["pub_rec_bankruptcies"].clip(upper=3)
+
+    # Binary feature: has bankruptcy or not
+    df["has_bankruptcy"] = (df["pub_rec_bankruptcies"].fillna(0) > 0).astype(int)
 
     return df

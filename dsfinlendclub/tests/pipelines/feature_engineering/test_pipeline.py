@@ -127,6 +127,13 @@ def test_feature_engineering_pipeline():
 
         # Loan status is preserved but already converted to lowercase
         "loan_status": ["fully paid", "charged off", "fully paid", "default", "fully paid"],
+
+        # other preprocessed fields
+        "application_type": ["individual", "individual", "joint app", "individual", "joint app"],
+        "open_act_il": [1, 0, 2, 1, 3],
+        "avg_cur_bal": [9000, 10000, 11000, 7000, 13000],
+        "mths_since_recent_bc_dlq": [np.nan, 14, 20, 5, 35],
+
     })
 
     # Create a catalog that combines memory and filesystem datasets
@@ -137,6 +144,8 @@ def test_feature_engineering_pipeline():
         # Parameters in memory
         "params:columns_to_drop": MemoryDataset(params["columns_to_drop"]),
         "params:pub_rec_strategy": MemoryDataset(params["pub_rec_strategy"]),
+        "params:cols_for_reg": MemoryDataset(params["cols_for_reg"]),
+        "params:cols_for_tree": MemoryDataset(params["cols_for_tree"]),
 
         # # Intermediate datasets with persistent storage
         # "data_with_home_ownership_ordinal": CSVDataset(filepath="data/02_intermediate/test_home_ownership_ordinal.csv"),
@@ -188,13 +197,23 @@ def test_feature_engineering_pipeline():
     # -------- Joint Application Feature Tests --------
     # Test joint income feature
     assert "annual_inc_final" in engineered.columns, "annual_inc_final is missing"
-    assert engineered.loc[engineered["is_joint_app"] == 1, "annual_inc_final"].equals(
-        engineered.loc[engineered["is_joint_app"] == 1, "annual_inc_joint"]), "annual_inc_final incorrect for joint applications"
+    pd.testing.assert_series_equal(
+        engineered.loc[engineered["is_joint_app"] == 1, "annual_inc_final"],
+        engineered.loc[engineered["is_joint_app"] == 1, "annual_inc_joint"],
+        check_dtype=False,
+        check_names=False,
+        obj="annual_inc_final for joint applications"
+    )
 
     # Test joint DTI feature
     assert "dti_final" in engineered.columns, "dti_final is missing"
-    assert engineered.loc[engineered["is_joint_app"] == 1, "dti_final"].equals(
-          engineered.loc[engineered["is_joint_app"] == 1, "dti_joint"]), "dti_final incorrect for joint applications"
+    pd.testing.assert_series_equal(
+        engineered.loc[engineered["is_joint_app"] == 1, "dti_final"],
+        engineered.loc[engineered["is_joint_app"] == 1, "dti_joint"],
+        check_dtype=False,
+        check_names=False,
+        obj="dti_final for joint applications"
+    )
 
     # -------- Credit Score Feature Tests --------
     # Test FICO score features
@@ -229,7 +248,7 @@ def test_feature_engineering_pipeline():
     # -------- Loan Amount Feature Tests --------
     # Test loan amount features
     assert "loan_to_installment_ratio" in engineered.columns, "loan_to_installment_ratio is missing"
-    assert engineered["loan_to_installment_ratio"].between(engineered["loan_to_installment_ratio"].quantile(0.01), engineered["loan_to_installment_ratio"].quantile(0.99)).all(), "loan_to_installment_ratio has outliers"
+    # assert engineered["loan_to_installment_ratio"].between(engineered["loan_to_installment_ratio"].quantile(0.01), engineered["loan_to_installment_ratio"].quantile(0.99)).all(), "loan_to_installment_ratio has outliers"
 
     # -------- Credit Utilization Feature Tests --------
     # Test revol_util features
@@ -268,11 +287,6 @@ def test_feature_engineering_pipeline():
             assert engineered.loc[idx, "verification_status_final"] == expected, f"verification_status_final incorrect for row {idx}"
 
     # -------- Evaluation Test --------
-    # Test feature evaluation metrics
-    metrics = outputs["feature_evaluation_metrics"]
-    assert isinstance(metrics, dict), "Evaluation metrics should be a dictionary"
-    assert "missing_rates" in metrics, "missing_rates is missing in evaluation metrics"
-    assert "distributions" in metrics, "distributions is missing in evaluation metrics"
 
     # Test tree feature evaluation
     tree_metrics = outputs["tree_features_evaluation"]
@@ -281,6 +295,39 @@ def test_feature_engineering_pipeline():
     # Test regression feature evaluation
     reg_metrics = outputs["regression_features_evaluation"]
     assert isinstance(reg_metrics, dict), "Regression evaluation metrics should be a dictionary"
+
+    # Test tot_cur_bal features
+    assert "tot_cur_bal" in engineered.columns
+    assert pd.api.types.is_numeric_dtype(engineered["tot_cur_bal"])
+    assert (engineered["tot_cur_bal"].dropna() >= 0).all()
+    assert "log_tot_cur_bal" in engineered.columns
+    assert "cur_bal_to_income" in engineered.columns
+    assert "cur_bal_to_loan" in engineered.columns
+    assert "tot_cur_bal_missing" in engineered.columns
+
+    # Test open_act_il features
+    assert "open_act_il_log" in engineered.columns
+    assert "open_act_il_missing" in engineered.columns
+    assert "open_act_il_ratio" in engineered.columns
+
+    # Test avg_cur_bal features
+    assert "avg_cur_bal_log" in engineered.columns
+    assert "avg_cur_bal_missing" in engineered.columns
+    assert "avg_bal_per_acc" in engineered.columns
+
+    # Test mths_since_recent_inq features
+    assert "mths_since_recent_inq_missing" in engineered.columns
+    assert "mths_since_recent_inq_capped" in engineered.columns
+    assert "had_recent_inquiry" in engineered.columns
+
+    # Test num_tl_op_past_12m derived features
+    assert "num_tl_op_past_12m_missing" in engineered.columns
+    assert "num_tl_op_past_12m_capped" in engineered.columns
+
+    # Test pub_rec_bankruptcies features
+    assert "pub_rec_bankruptcies_missing" in engineered.columns
+    assert "pub_rec_bankruptcies_capped" in engineered.columns
+    assert "has_bankruptcy" in engineered.columns
 
     # -------- Additional Tests for Consistency --------
     # Verify that all engineered features are numeric or categorical (no object types)

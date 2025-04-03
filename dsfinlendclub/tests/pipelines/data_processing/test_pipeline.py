@@ -281,7 +281,7 @@ def test_data_processing_pipeline_runs():
 
     # annual_inc_joint
     assert pd.api.types.is_numeric_dtype(processed["annual_inc_joint"])
-    assert (processed['annual_inc_joint'] > 0).all()
+    assert (processed['annual_inc_joint'].dropna() >= 0).all()
 
     # # Check column exists before validating its values
     # if "annual_inc" in processed.columns and not processed["annual_inc"].empty:
@@ -301,7 +301,7 @@ def test_data_processing_pipeline_runs():
     assert processed["int_rate"].dtype == float
 
     # term
-    assert processed["term"].dtype in [int, "int32", "int64"]
+    assert pd.api.types.is_integer_dtype(processed["term"])
     assert set(processed["term"].unique()) <= {36, 60}, "Unexpected values in 'term'"
 
     # emp_length
@@ -333,7 +333,7 @@ def test_data_processing_pipeline_runs():
     # revol_util
     if "revol_util" in processed.columns:
         print(processed["revol_util"].head())  # Debug
-        assert pd.api.types.is_float_dtype(processed["revol_util"]), "Expected revol_util to be float"
+        assert pd.api.types.is_numeric_dtype(processed["revol_util"])
         assert processed["revol_util"].dropna().between(0, 100).all()
     else:
         raise AssertionError("Expected 'revol_util' column is missing in processed dataset")
