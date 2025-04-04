@@ -2,17 +2,41 @@
 
 This project is built using [Kedro](https://github.com/kedro-org/kedro), an opinionated Python framework for reproducible, maintainable, and modular data science code. It focuses on analyzing and modeling LendingClub loan data, with pipelines structured from initial data processing through feature engineering.
 
+> 🤖 **Note**: The development of this pipeline was assisted by [Claude AI](https://claude.ai), with design patterns and implementation strategies adapted from the excellent guide in [this Medium blog post](https://medium.com/@DaveThackeray/claude-3-7-sonnet-the-first-ai-model-that-understands-your-entire-codebase-560915c6a703).
+
+---
+---
+
+## ✅ Testing
+
+Robust unit tests have been written to ensure correctness and pipeline integrity:
+
+- `tests/pipelines/data_processing/test_pipeline.py`  
+  Verifies preprocessing logic, data cleaning, and column consistency.
+
+- `tests/pipelines/feature_engineering/test_pipeline.py`  
+  Includes comprehensive checks for:
+  - Feature creation (joint features, hardship flags, encodings)
+  - Model-specific transformations (tree vs regression)
+  - No data leakage or invalid types
+  - Consistent outputs from intermediate to final datasets
+
+Run tests via:
+
+```bash
+pytest tests/
+```
 ---
 
 ---
 
 ## 🔄 Data Flow
 
-| Stage                  | Input                   | Output                          | Location                |
-|------------------------|--------------------------|----------------------------------|-------------------------|
-| `01_raw`               | Raw LendingClub data    | `raw_data`                      | `data/01_raw/`          |
-| `02_intermediate`      | Deduplicated + cleaned  | `data_processing_output`        | `data/02_intermediate/` |
-| `04_feature`           | Feature-engineered set  | `feature_data_tree`, `feature_data_reg` | `data/04_feature/`      |
+| Stage                  | Input                   | Output                                 | Location                |
+|------------------------|--------------------------|----------------------------------------|------------------------|
+| `01_raw`               | Raw LendingClub data    | `raw_data: Loan_status_2007-2020Q3`    | `data/01_raw/`          |
+| `02_intermediate`      | Deduplicated + cleaned  | `preprocessed_lc_data`                 | `data/02_intermediate/` |
+| `04_feature`           | Feature-engineered set  | `tree_features`, `regression_features` | `data/04_feature/`      |
 
 ---
 
@@ -80,5 +104,6 @@ To run only data processing:
 
 ```bash
 kedro run --pipeline data_processing
+kedro run --pipeline feature_engineering
 ```
 
