@@ -749,7 +749,6 @@ def evaluate_feature_engineering(df: pd.DataFrame) -> dict:
     print("Non-numeric columns:", list(non_numeric_cols))
 
     # Target correlation if available
-    # Target correlation if available
     if "loan_status_binary" in df.columns:
         numeric_df = df.select_dtypes(include=["number"])  # Only use numeric columns
         metrics["target_correlations"] = (
@@ -1084,24 +1083,32 @@ def process_tot_cur_bal_features(df: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: Updated DataFrame with new engineered features.
     """
     if "tot_cur_bal" in df.columns:
-        df["tot_cur_bal"] = pd.to_numeric(df["tot_cur_bal"], errors="coerce")
-        df["tot_cur_bal"] = df["tot_cur_bal"].clip(lower=0)
+        df["tot_cur_bal"] = pd.to_numeric(df["tot_cur_bal"], errors="coerce").clip(lower=0)
 
-        # Log transform (for regression models that prefer normalized features)
         df["log_tot_cur_bal"] = np.log1p(df["tot_cur_bal"])
 
-        # Feature: Balance relative to annual income
         df["cur_bal_to_income"] = df["tot_cur_bal"] / df["annual_inc"]
-
-        # Feature: Balance relative to loan amount
         df["cur_bal_to_loan"] = df["tot_cur_bal"] / df["loan_amnt"]
 
-        # Binary indicator for missing values (useful for trees)
         df["tot_cur_bal_missing"] = df["tot_cur_bal"].isna().astype(int)
 
-        # Handle infinities and fill missing
-        df["cur_bal_to_income"] = df["cur_bal_to_income"].replace([np.inf, -np.inf], np.nan).fillna(0)
-        df["cur_bal_to_loan"] = df["cur_bal_to_loan"].replace([np.inf, -np.inf], np.nan).fillna(0)
+        # Replace infs and NaNs
+        df["cur_bal_to_income"] = df["cur_bal_to_income"].replace([np.inf, -np.inf], np.nan)
+        df["cur_bal_to_loan"] = df["cur_bal_to_loan"].replace([np.inf, -np.inf], np.nan)
+
+        # Impute or cap as needed
+        df["cur_bal_to_loan"] = df["cur_bal_to_loan"].fillna(df["cur_bal_to_loan"].median())
+        df["cur_bal_to_loan"] = df["cur_bal_to_loan"].clip(upper=df["cur_bal_to_loan"].quantile(0.99))
+
+        # Add banded feature (for trees)
+        df["cur_bal_to_loan_band"] = pd.qcut(df["cur_bal_to_loan"], q=10, labels=False, duplicates="drop")
+
+        # Optional log for regression
+        df["log_cur_bal_to_loan"] = np.log1p(df["cur_bal_to_loan"])
+
+        # Optional interaction
+        if "fico_average" in df.columns:
+            df["cur_bal_to_loan_x_fico"] = df["cur_bal_to_loan"] * df["fico_average"]
 
     else:
         print("Warning: 'tot_cur_bal' not found in DataFrame.")

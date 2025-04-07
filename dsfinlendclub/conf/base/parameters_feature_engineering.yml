@@ -6,6 +6,7 @@
 
 pub_rec_strategy: "median"
 columns_to_drop:
+  - tot_cur_bal
   - verification_status_final
   - loan_status
   - application_type
@@ -64,6 +65,8 @@ columns_to_drop:
   - mths_since_last_major_derog
 
 cols_for_reg:
+  - log_cur_bal_to_loan
+  - log_tot_cur_bal
   - dti_joint
   - annual_inc_joint
   - is_joint_app
@@ -77,7 +80,6 @@ cols_for_reg:
   - dti_final
   - emp_length_clean_reg
   - fico_average
-  - fico_risk_band
   - grade_encoded
   - hardship_dpd_filled
   - has_delinq_reg
@@ -102,11 +104,11 @@ cols_for_reg:
   - revol_util_reg
   - sub_grade_encoded
   - term_reg
-  - tot_cur_bal_missing
   - util_band_reg
 
 
 cols_for_tree:
+  - cur_bal_to_loan_band
   - annual_inc_joint
   - dti_joint
   - is_joint_app
