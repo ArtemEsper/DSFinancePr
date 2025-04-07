@@ -153,7 +153,6 @@ cols_for_tree:
   - revol_util_tree
   - mths_since_last_major_derog_filled
   - mths_since_recent_inq_missing
-  - was_late_before_hardship
   - hardship_dpd_filled
   - has_delinq_tree
   - grade_encoded

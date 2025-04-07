@@ -160,6 +160,7 @@ def test_data_processing_pipeline_runs():
         "avg_cur_bal": [5000, 4000, 6000],  # ✅ retain => float
         "num_tl_op_past_12m": [4, 3, 5],  # ✅ retain
         "mths_since_last_major_derog": [None, 60, 12],  # ✅ retain
+        "loan_status_binary": [1, 0, 1],   # ✅ retain => converted from
     })
 
     catalog = DataCatalog({

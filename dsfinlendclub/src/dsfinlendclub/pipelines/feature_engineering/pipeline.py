@@ -5,7 +5,6 @@ Feature engineering pipeline for the LendingClub credit risk modeling project.
 from kedro.pipeline import Pipeline, node, pipeline
 from .nodes import (
     create_has_hardship_flag,
-    create_was_late_before_hardship,
     create_hardship_features,
     engineer_emp_length_features,
     encode_interest_and_grade_fields,
@@ -63,7 +62,7 @@ def create_pipeline(**kwargs) -> Pipeline:
             # Group 1: Categorical field handling
             node(
                 func=create_home_ownership_ordinal,
-                inputs="intermediate_data",
+                inputs="intermediate_data",  # intermediate_sample_data, intermediate_data
                 outputs="data_with_home_ownership_ordinal",
                 name="create_home_ownership_ordinal",
             ),
@@ -87,15 +86,15 @@ def create_pipeline(**kwargs) -> Pipeline:
                 outputs="data_with_hardship_flag",
                 name="create_hardship_flag",
             ),
-            node(
-                func=create_was_late_before_hardship,
-                inputs="data_with_hardship_flag",
-                outputs="data_with_late_hardship",
-                name="create_late_hardship",
-            ),
+            # node(
+            #     func=create_was_late_before_hardship,
+            #     inputs="data_with_hardship_flag",
+            #     outputs="data_with_late_hardship",
+            #     name="create_late_hardship",
+            # ),
             node(
                 func=create_hardship_features,
-                inputs="data_with_late_hardship",
+                inputs="data_with_hardship_flag",
                 outputs="data_with_hardship_features",
                 name="create_hardship_features",
             ),

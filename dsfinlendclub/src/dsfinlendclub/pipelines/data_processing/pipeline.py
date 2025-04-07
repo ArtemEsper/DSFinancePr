@@ -23,7 +23,7 @@ def create_pipeline(**kwargs) -> Pipeline:
         [
             node(
                 func=check_and_remove_duplicates,
-                inputs="raw_data",  # lendingclub for transformation and raw_data dataset for the tests
+                inputs="lendingclub",  # lendingclub for transformation and raw_data dataset for the tests
                 outputs=["deduped_data", "dedup_flag"],
                 name="deduplicate_by_id",
             ),

@@ -216,18 +216,23 @@ def filter_and_encode_loan_status(df: pd.DataFrame) -> pd.DataFrame:
         'Fully Paid' → 0
         'Charged Off' / 'Default' → 1
     - Drops all other statuses.
-
-    Parameters:
-        df (pd.DataFrame): Input data with 'loan_status'
-
-    Returns:
-        pd.DataFrame: Cleaned and encoded DataFrame
     """
-    valid_statuses = ["fully paid", "charged off", "default"]
+    # Normalize
     df["loan_status"] = df["loan_status"].str.strip().str.lower()
-    df["loan_status_binary"] = df["loan_status"].map(
-        {"fully Paid": 0, "charged Off": 1, "default": 1}
-    )
+
+    # Define mapping
+    status_map = {
+        "fully paid": 0,
+        "charged off": 1,
+        "default": 1,
+    }
+
+    # Filter to resolved statuses
+    df = df[df["loan_status"].isin(status_map.keys())].copy()
+
+    # Map to binary
+    df["loan_status_binary"] = df["loan_status"].map(status_map)
+
     return df
 
 

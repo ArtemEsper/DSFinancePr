@@ -176,6 +176,11 @@ def test_feature_engineering_pipeline():
     # regression_features = outputs["regression_features"]
 
     # -------- Basic Validation Tests --------
+
+    # Target variable
+    assert "loan_status_binary" in engineered.columns
+    assert engineered["loan_status_binary"].isin([0, 1]).all()
+
     # Verify dataset types
     assert isinstance(engineered, pd.DataFrame), "Engineered features should be a DataFrame"
     assert isinstance(tree_features, pd.DataFrame), "Tree features should be a DataFrame"

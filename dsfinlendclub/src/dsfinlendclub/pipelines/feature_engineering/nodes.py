@@ -101,25 +101,25 @@ def engineer_emp_length_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def create_was_late_before_hardship(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Create a binary flag indicating whether the borrower's hardship started while the loan was already in a late status.
-
-    Parameters:
-        df (pd.DataFrame): Input DataFrame containing 'hardship_loan_status'.
-
-    Returns:
-        pd.DataFrame: DataFrame with new 'was_late_before_hardship' feature.
-    """
-    if "hardship_loan_status" in df.columns:
-        df["was_late_before_hardship"] = (
-            df["hardship_loan_status"].str.contains("late", na=False).astype(int)
-        )
-        # df.drop(columns=["hardship_loan_status"], inplace=True)
-    else:
-        df["was_late_before_hardship"] = 0  # default to 0 if field is missing
-
-    return df
+# def create_was_late_before_hardship(df: pd.DataFrame) -> pd.DataFrame:
+#     """
+#     Create a binary flag indicating whether the borrower's hardship started while the loan was already in a late status.
+#
+#     Parameters:
+#         df (pd.DataFrame): Input DataFrame containing 'hardship_loan_status'.
+#
+#     Returns:
+#         pd.DataFrame: DataFrame with new 'was_late_before_hardship' feature.
+#     """
+#     if "hardship_loan_status" in df.columns:
+#         df["was_late_before_hardship"] = (
+#             df["hardship_loan_status"].str.contains("late", na=False).astype(int)
+#         )
+#         # df.drop(columns=["hardship_loan_status"], inplace=True)
+#     else:
+#         df["was_late_before_hardship"] = 0  # default to 0 if field is missing
+#
+#     return df
 
 
 def encode_interest_and_grade_fields(df: pd.DataFrame) -> pd.DataFrame:
@@ -245,18 +245,19 @@ def create_joint_dti_feature(df):
     """
     Creates a unified DTI feature ('dti_final') that accounts for joint applications.
     If the application is joint, use 'dti_joint', otherwise use 'dti'.
-
-    Parameters:
-        df (pd.DataFrame): Input DataFrame with 'dti', 'dti_joint', and 'is_joint_app'.
-
-    Returns:
-        pd.DataFrame: Updated DataFrame with 'dti_final'.
+    Also fills missing values to ensure no NaNs remain.
     """
     df["dti_final"] = df["dti"]
+
     if "is_joint_app" in df.columns and "dti_joint" in df.columns:
         df.loc[df["is_joint_app"] == 1, "dti_final"] = df.loc[
             df["is_joint_app"] == 1, "dti_joint"
         ]
+
+    # Fallback fill for any remaining NaNs
+    if df["dti_final"].isna().any():
+        df["dti_final"] = df["dti_final"].fillna(df["dti_final"].median())
+
     return df
 
 
@@ -475,9 +476,9 @@ def create_initial_list_status_flag(df):
         pd.DataFrame: Updated DataFrame with 'initial_list_status_flag'.
     """
     if "initial_list_status" in df.columns:
-        df["initial_list_status_flag"] = (df["initial_list_status"] == "w").astype(int)
-        # df.drop(columns=["initial_list_status"], inplace=True)
-
+        df["initial_list_status_flag"] = (
+                df["initial_list_status"].str.lower().str.strip() == "w"
+        ).astype(int)
     return df
 
 
@@ -1041,16 +1042,16 @@ def create_loan_purpose_risk_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def create_combined_hardship_risk(df):
-    """
-    Optional: Combine hardship indicators into a single binary flag.
-    """
-    df["hardship_risk_flag"] = (
-            (df["has_hardship"] == 1)
-            & (df["was_late_before_hardship"] == 1)
-            & (df["hardship_dpd_filled"] > 30)
-    ).astype(int)
-    return df
+# def create_combined_hardship_risk(df):
+#     """
+#     Optional: Combine hardship indicators into a single binary flag.
+#     """
+#     df["hardship_risk_flag"] = (
+#             (df["has_hardship"] == 1)
+#             & (df["was_late_before_hardship"] == 1)
+#             & (df["hardship_dpd_filled"] > 30)
+#     ).astype(int)
+#     return df
 
 
 def create_major_derog_features(df: pd.DataFrame) -> pd.DataFrame:

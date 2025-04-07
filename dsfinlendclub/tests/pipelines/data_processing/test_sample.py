@@ -2,7 +2,7 @@ import pandas as pd
 from ydata_profiling import ProfileReport
 from kedro.config import OmegaConfigLoader
 from kedro.io import DataCatalog, MemoryDataset
-from kedro_datasets.pandas import ParquetDataSet
+from kedro_datasets.pandas import ParquetDataset
 from kedro.runner import SequentialRunner
 from dsfinlendclub.pipelines.data_processing.pipeline import create_pipeline
 from pathlib import Path
@@ -28,7 +28,7 @@ def test_data_processing_pipeline_on_sample():
     test_catalog = DataCatalog({
         "raw_data": MemoryDataset(sample),
         "params:admin_columns_to_drop": MemoryDataset(columns_to_drop),
-        # "intermediate_data": ParquetDataSet(filepath="data/02_intermediate/preprocessed_sample_data.pq"),
+        # "intermediate_data": ParquetDataset(filepath="data/02_intermediate/preprocessed_sample_data.pq"),
         "dedup_flag": MemoryDataset(),  # will be filled by the pipeline
     })
 
@@ -63,6 +63,10 @@ def test_data_processing_pipeline_on_sample():
     # fields to delete
     for col in columns_to_drop:
         assert col not in processed.columns, f"{col} was not dropped"
+
+    # loan_status
+    assert "loan_status_binary" in processed.columns
+    assert processed["loan_status_binary"].dropna().isin([0, 1]).all()  # Check binary target created
 
     # loan_amnt
     assert pd.api.types.is_numeric_dtype(processed['loan_amnt'])
